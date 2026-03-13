@@ -3,7 +3,11 @@ import { eq } from "drizzle-orm";
 import { db } from "~~/db";
 import { auctions, deposits, stealthAnnouncements, stealthKeys } from "~~/db/schema";
 import { sendMany } from "~~/services/penumbra/bitgo";
-import { determineWinner, settle as settleOnChain } from "~~/services/penumbra/contract";
+import {
+  determineWinner,
+  getAuction as getOnChainAuction,
+  settle as settleOnChain,
+} from "~~/services/penumbra/contract";
 import { generateStealthAddress } from "~~/services/penumbra/umbra";
 
 /**
@@ -73,7 +77,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const sellerStealth = generateStealthAddress(sellerKeys.spendingPublicKey, sellerKeys.viewingPublicKey);
 
     // --- 5. On-chain settlement: transfer ERC-20 to winner's stealth address ---
-    const settleTxReceipt = await settleOnChain(auctionId, winnerStealth.stealthAddress);
+    // Skip if the contract already reports settled (e.g. if a prior API call
+    // sent the tx but crashed before completing the off-chain steps).
+    let settleTxHash = "";
+    const onChainAuction = await getOnChainAuction(auctionId);
+    if (onChainAuction.settled) {
+      console.log(`Auction ${auctionId} already settled on-chain, skipping on-chain call`);
+      settleTxHash = "(already settled on-chain)";
+    } else {
+      const settleTxReceipt = await settleOnChain(auctionId, winnerStealth.stealthAddress);
+      settleTxHash = settleTxReceipt.transactionHash;
+    }
 
     // --- 6. BitGo settlement: send ETH from auction wallet ---
     // Build recipient list: seller gets the winning bid, losers get refunded
@@ -130,14 +144,21 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         winningAmount: winningAmount.toString(),
         winnerStealthAddress: winnerStealth.stealthAddress,
         sellerStealthAddress: sellerStealth.stealthAddress,
-        onChainTxHash: settleTxReceipt.transactionHash,
+        onChainTxHash: settleTxHash,
         bitgoTxId,
         refundedBidders: bitgoRecipients.length - 1, // exclude seller
       },
     });
   } catch (error) {
     console.error("auction/[id]/settle error:", error);
+    // Log full stack for debugging
+    if (error instanceof Error) {
+      console.error("Stack:", error.stack);
+    }
     const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, stack: error instanceof Error ? error.stack?.split("\n").slice(0, 5) : undefined },
+      { status: 500 },
+    );
   }
 }

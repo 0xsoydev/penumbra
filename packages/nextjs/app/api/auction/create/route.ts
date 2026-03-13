@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { auctionId, sellerAddress, ensName, docCid } = body;
 
-    if (!auctionId || !sellerAddress) {
+    if (auctionId === undefined || auctionId === null || !sellerAddress) {
       return NextResponse.json({ error: "Missing required fields: auctionId, sellerAddress" }, { status: 400 });
     }
 
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Create BitGo wallet for this auction
-    const { walletId, walletAddress } = await createAuctionWallet(id);
+    const { walletId, walletAddress, feeAddress, baseAddress } = await createAuctionWallet(id);
 
     // 2. Insert auction record
     await db.insert(auctions).values({
@@ -50,6 +50,8 @@ export async function POST(req: NextRequest) {
         sellerAddress: sellerAddress.toLowerCase(),
         bitgoWalletId: walletId,
         bitgoWalletAddress: walletAddress,
+        feeAddress,
+        baseAddress,
         ensName: ensName || null,
         docCid: docCid || null,
       },

@@ -107,7 +107,29 @@ export async function determineWinner(auctionId: number): Promise<{ winner: stri
  */
 export async function settle(auctionId: number, winnerStealthAddress: string) {
   const contract = getWriteContract();
-  const tx = await contract.settle(auctionId, winnerStealthAddress);
-  const receipt = await tx.wait();
+  // Use a fixed gas limit to avoid UNPREDICTABLE_GAS_LIMIT on Base Sepolia
+  const tx = await contract.settle(auctionId, winnerStealthAddress, {
+    gasLimit: 300_000,
+  });
+  let receipt;
+  try {
+    receipt = await tx.wait();
+  } catch (e: any) {
+    // tx.wait() can fail with "transaction type not supported" on Base Sepolia
+    // due to ethers v5 parsing bugs, but the tx may have landed on-chain.
+    // Re-fetch the receipt by hash as a fallback.
+    console.warn("tx.wait() failed:", e.message, "— retrying via getTransactionReceipt");
+    const provider = getProvider();
+    let attempts = 0;
+    while (attempts < 30) {
+      receipt = await provider.getTransactionReceipt(tx.hash);
+      if (receipt && receipt.blockNumber) break;
+      await new Promise(r => setTimeout(r, 2000));
+      attempts++;
+    }
+    if (!receipt || !receipt.blockNumber) {
+      throw new Error(`Transaction ${tx.hash} not confirmed after retries: ${e.message}`);
+    }
+  }
   return receipt;
 }

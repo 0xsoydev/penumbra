@@ -14,6 +14,7 @@ const WALLET_PASSPHRASE = process.env.BITGO_WALLET_PASSPHRASE || "auction-passph
 const COIN = "tbaseeth";
 
 let _sdk: BitGoAPI | null = null;
+let _unlockExpires = 0;
 
 function getSdk(): BitGoAPI {
   if (_sdk) return _sdk;
@@ -24,6 +25,19 @@ function getSdk(): BitGoAPI {
   // Register the coin module
   _sdk.register(COIN, Eth.createInstance);
   return _sdk;
+}
+
+/**
+ * Ensure the BitGo session is unlocked for sending.
+ * In test env, OTP "000000" is accepted.
+ * Caches the unlock for 50 minutes (BitGo grants 60min).
+ */
+async function ensureUnlocked(): Promise<void> {
+  if (Date.now() < _unlockExpires) return; // still valid
+  const sdk = getSdk();
+  await sdk.unlock({ otp: "000000", duration: 3600 });
+  _unlockExpires = Date.now() + 50 * 60 * 1000; // cache for 50 min
+  console.log("[BitGo] Session unlocked for sending");
 }
 
 // ----------------------------------------------------------------
@@ -38,6 +52,8 @@ function getSdk(): BitGoAPI {
 export async function createAuctionWallet(auctionId: number): Promise<{
   walletId: string;
   walletAddress: string;
+  feeAddress: string;
+  baseAddress: string;
 }> {
   const sdk = getSdk();
   const coin = sdk.coin(COIN);
@@ -54,7 +70,13 @@ export async function createAuctionWallet(auctionId: number): Promise<{
   const walletId = wallet.id();
   const walletAddress = wallet.receiveAddress() || "";
 
-  return { walletId, walletAddress };
+  // Extract fee + base addresses from coinSpecific for gas funding
+  const data = wallet.toJSON();
+  const coinSpecific = data.coinSpecific as unknown as Record<string, string> | undefined;
+  const feeAddress = coinSpecific?.feeAddress || "";
+  const baseAddress = coinSpecific?.baseAddress || walletAddress;
+
+  return { walletId, walletAddress, feeAddress, baseAddress };
 }
 
 /**
@@ -99,10 +121,20 @@ type Recipient = {
  */
 export async function sendMany(walletId: string, recipients: Recipient[]): Promise<string> {
   const sdk = getSdk();
+  await ensureUnlocked();
   const coin = sdk.coin(COIN);
   const wallet = await coin.wallets().get({ id: walletId });
 
+  console.log(
+    "[BitGo] sendMany — wallet balance:",
+    wallet.balanceString(),
+    "spendable:",
+    wallet.spendableBalanceString(),
+  );
+  console.log("[BitGo] sendMany — recipients:", JSON.stringify(recipients));
+
   const result = await wallet.sendMany({
+    type: "transfer",
     recipients: recipients.map(r => ({
       address: r.address,
       amount: r.amount,

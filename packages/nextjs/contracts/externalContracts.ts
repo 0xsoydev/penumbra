@@ -1,16 +1,13 @@
 import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
-/**
- * @example
- * const externalContracts = {
- *   1: {
- *     DAI: {
- *       address: "0x...",
- *       abi: [...],
- *     },
- *   },
- * } as const;
- */
-const externalContracts = {} as const;
+const externalContracts = {
+  84532: {
+    // Base Sepolia
+    DarkToken: {
+      address: "0x0000000000000000000000000000000000000000",
+      abi: [],
+    },
+  },
+} as const satisfies GenericContractsDeclaration;
 
-export default externalContracts satisfies GenericContractsDeclaration;
+export default externalContracts;

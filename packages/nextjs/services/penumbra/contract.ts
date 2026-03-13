@@ -1,25 +1,28 @@
 import { ethers } from "ethers";
 
 // ----------------------------------------------------------------
-// DarkAuction contract service — server-side only (ethers v5)
-// TODO: Replace with real address after Person 1 deploys
+// PenumbraAuction contract service — server-side only (ethers v5)
+// Deployed on Base Sepolia: packages/foundry/deployments/84532.json
 // ----------------------------------------------------------------
 
 const DARKAUCTION_ADDRESS = process.env.DARKAUCTION_CONTRACT_ADDRESS || ethers.constants.AddressZero;
 const RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
 const DEPLOYER_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
-// Minimal ABI — only the functions Person 2 backend calls
+// Minimal ABI — only the functions Person 2 backend calls.
+// Tuple field order MUST match the on-chain Auction struct exactly:
+//   seller, tokenAddress, tokenAmount, minimumBid, commitDeadline,
+//   revealDeadline, winner, winningBid, winnerStealthAddress, settled, cancelled
 const DARKAUCTION_ABI = [
   // --- Write (only callable by deployer / owner) ---
   "function settle(uint256 auctionId, address winnerStealthAddress) external",
   // --- Read ---
-  "function getAuction(uint256 auctionId) external view returns (tuple(address seller, address tokenAddress, uint256 tokenAmount, uint256 minBid, uint256 commitDeadline, uint256 revealDeadline, bool settled))",
+  "function getAuction(uint256 auctionId) external view returns (tuple(address seller, address tokenAddress, uint256 tokenAmount, uint256 minimumBid, uint256 commitDeadline, uint256 revealDeadline, address winner, uint256 winningBid, address winnerStealthAddress, bool settled, bool cancelled))",
   "function getAuctionBidders(uint256 auctionId) external view returns (address[])",
   "function getCommit(uint256 auctionId, address bidder) external view returns (tuple(bytes32 commitHash, bool revealed, uint256 revealedAmount))",
   // --- Events ---
-  "event AuctionCreated(uint256 indexed auctionId, address indexed seller)",
-  "event Settled(uint256 indexed auctionId, address winner, uint256 amount)",
+  "event AuctionCreated(uint256 indexed auctionId, address indexed seller, address tokenAddress, uint256 tokenAmount)",
+  "event AuctionSettled(uint256 indexed auctionId, address indexed winner, uint256 winningBid, address stealthAddress)",
 ];
 
 function getProvider() {
@@ -46,10 +49,14 @@ export type AuctionData = {
   seller: string;
   tokenAddress: string;
   tokenAmount: ethers.BigNumber;
-  minBid: ethers.BigNumber;
+  minimumBid: ethers.BigNumber;
   commitDeadline: ethers.BigNumber;
   revealDeadline: ethers.BigNumber;
+  winner: string;
+  winningBid: ethers.BigNumber;
+  winnerStealthAddress: string;
   settled: boolean;
+  cancelled: boolean;
 };
 
 export type CommitData = {

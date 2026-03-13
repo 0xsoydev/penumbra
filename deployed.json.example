@@ -1,0 +1,8 @@
+{
+  "network": "baseSepolia",
+  "chainId": 84532,
+  "PenumbraToken": "0x_REPLACE_WITH_PenumbraToken_ADDRESS",
+  "PenumbraAuction": "0x_REPLACE_WITH_PenumbraAuction_ADDRESS",
+  "deployedAt": "2026-03-13T00:00:00.000Z",
+  "deployerAddress": "0x_REPLACE_WITH_DEPLOYER_ADDRESS"
+}

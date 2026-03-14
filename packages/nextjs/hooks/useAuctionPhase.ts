@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { AuctionPhase, type AuctionPhaseData } from "~~/types/auction";
@@ -26,8 +24,9 @@ export function useAuctionPhase(auctionId: number): AuctionPhaseData {
     const phase = Number(phaseRaw ?? 0);
 
     let deadline = 0;
-    if (phase === AuctionPhase.COMMIT) deadline = Number((auction as { commitDeadline: bigint }).commitDeadline);
-    else if (phase === AuctionPhase.REVEAL) deadline = Number((auction as { revealDeadline: bigint }).revealDeadline);
+    const auctionData = auction as { commitDeadline?: bigint; revealDeadline?: bigint } | undefined;
+    if (phase === AuctionPhase.COMMIT) deadline = Number(auctionData?.commitDeadline ?? 0n);
+    else if (phase === AuctionPhase.REVEAL) deadline = Number(auctionData?.revealDeadline ?? 0n);
 
     const remaining = Math.max(0, deadline - now);
     setTimeRemaining(remaining);

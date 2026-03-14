@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { keccak256, encodePacked } from "viem";
 import { useAccount } from "wagmi";

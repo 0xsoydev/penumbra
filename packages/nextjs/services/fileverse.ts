@@ -1,4 +1,4 @@
-// Client-safe: @fileverse/fileverse-crypto uses NaCl secretbox — browser compatible.
+// Client-safe: uses tweetnacl NaCl secretbox — browser compatible.
 // Do NOT import ethers, umbra-js, or any server-only service here.
 
 import { secretbox, randomBytes } from "tweetnacl";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import type { BitGoDepositData } from "~~/types/auction";

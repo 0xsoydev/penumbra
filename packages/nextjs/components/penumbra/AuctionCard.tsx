@@ -5,7 +5,9 @@ import { CountdownTimer } from "./CountdownTimer";
 import { PhaseIndicator } from "./PhaseIndicator";
 import { Address } from "@scaffold-ui/components";
 import { formatEther } from "viem";
-import { AuctionData, AuctionPhase, ZERO_ADDRESS } from "~~/types/auction";
+import { AuctionData, AuctionPhase } from "~~/types/auction";
+
+const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 type AuctionCardProps = {
   auctionId: number;
@@ -15,8 +17,8 @@ type AuctionCardProps = {
 };
 
 export const AuctionCard = ({ auctionId, auction, phase, bidderCount }: AuctionCardProps) => {
-  const isActive = phase === AuctionPhase.COMMIT || phase === AuctionPhase.REVEAL;
-  const deadline = phase === AuctionPhase.COMMIT ? auction.commitDeadline : auction.revealDeadline;
+  const isActive = phase === AuctionPhase.COMMIT || phase === AuctionPhase.SETTLE;
+  const deadline = phase === AuctionPhase.COMMIT ? auction.commitDeadline : auction.settleDeadline;
 
   return (
     <Link href={`/auction/${auctionId}`}>
@@ -35,7 +37,7 @@ export const AuctionCard = ({ auctionId, auction, phase, bidderCount }: AuctionC
           {/* Seller */}
           <div className="flex items-center gap-2 text-sm opacity-70">
             <span className="font-semibold">Seller:</span>
-            <Address address={auction.seller} size="xs" />
+            <Address address={auction.seller} size="xs" disableAddressLink />
           </div>
 
           {/* Token info */}
@@ -62,21 +64,21 @@ export const AuctionCard = ({ auctionId, auction, phase, bidderCount }: AuctionC
                 <path d="M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.465 14.493a1.23 1.23 0 0 0 .41 1.412A9.957 9.957 0 0 0 10 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 0 0-13.074.003Z" />
               </svg>
               <span className="text-sm font-semibold">
-                {bidderCount} bidder{bidderCount !== 1 ? "s" : ""}
+                {bidderCount} bid{bidderCount !== 1 ? "s" : ""}
               </span>
             </div>
 
             {isActive && (
               <CountdownTimer
                 deadline={deadline}
-                label={phase === AuctionPhase.COMMIT ? "Commit ends" : "Reveal ends"}
+                label={phase === AuctionPhase.COMMIT ? "Commit ends" : "Settle ends"}
               />
             )}
 
-            {phase === AuctionPhase.ENDED && auction.winner !== ZERO_ADDRESS && (
+            {phase === AuctionPhase.ENDED && auction.winningNullifier !== ZERO_BYTES32 && (
               <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-wider opacity-50">Winning Bid</p>
-                <p className="font-mono font-bold text-sm text-success">{formatEther(auction.winningBid)} ETH</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider opacity-50">Winner</p>
+                <p className="font-mono font-bold text-xs text-success">{auction.winningNullifier.slice(0, 10)}...</p>
               </div>
             )}
 

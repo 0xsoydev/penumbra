@@ -19,6 +19,8 @@ const nextConfig: NextConfig = {
   },
   // Externalize heavy Node.js-only packages so webpack doesn't try to bundle them
   // (BitGo SDK has WASM deps, umbra-js uses Node crypto, ethers v5 is large)
+  // @aztec/bb.js (144MB WASM) and @noir-lang/noir_js MUST be here to avoid
+  // webpack trying to bundle them — they're only used in server-side API routes
   serverExternalPackages: [
     "@bitgo/sdk-api",
     "@bitgo/sdk-core",
@@ -28,6 +30,8 @@ const nextConfig: NextConfig = {
     "@wasmer/wasi",
     "@umbracash/umbra-js",
     "ethers",
+    "@aztec/bb.js",
+    "@noir-lang/noir_js",
   ],
   webpack: config => {
     config.resolve.fallback = { fs: false, net: false, tls: false };

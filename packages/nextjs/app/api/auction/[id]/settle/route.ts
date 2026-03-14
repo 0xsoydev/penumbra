@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "~~/db";
-import { auctions, deposits, stealthAnnouncements, stealthKeys } from "~~/db/schema";
-import { sendMany } from "~~/services/penumbra/bitgo";
+import { auctions, deposits } from "~~/db/schema";
 import { declareWinner as declareWinnerOnChain, getAuction as getOnChainAuction } from "~~/services/penumbra/contract";
-import { generateStealthAddress } from "~~/services/penumbra/umbra";
+import { executePayout } from "~~/services/penumbra/payout";
 
 /**
  * POST /api/auction/[id]/settle
@@ -16,10 +15,10 @@ import { generateStealthAddress } from "~~/services/penumbra/umbra";
  *   3. Determine highest bid (off-chain — amounts NEVER posted on-chain)
  *   4. Call declareWinner(auctionId, winningNullifier) on-chain
  *      — Only the nullifier is posted; no address, no amount
- *   5. Send ETH via BitGo:
+ *   5. Execute ETH payout via shared executePayout service:
  *      - Seller receives winning bid at stealth address
  *      - Losers get refunded to original addresses
- *   6. Store stealth announcements for seller
+ *      - If spendable balance is 0, payout is deferred (webhook will retry)
  *
  * NOTE: The winner claims tokens separately via claimWithProof (permissionless).
  *       This route does NOT transfer tokens — it only declares the winner and
@@ -92,57 +91,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     // Mark winner in DB
     await db.update(deposits).set({ isWinner: true }).where(eq(deposits.id, highestBid.id));
 
-    // --- 5. BitGo ETH settlement ---
-    // Look up seller stealth keys for ETH payment
-    const [sellerKeys] = await db
-      .select()
-      .from(stealthKeys)
-      .where(eq(stealthKeys.address, auction.sellerAddress.toLowerCase()));
-
-    const bitgoRecipients: { address: string; amount: string }[] = [];
-
-    if (sellerKeys) {
-      // Generate stealth address for seller to receive winning bid ETH
-      const sellerStealth = generateStealthAddress(sellerKeys.spendingPublicKey, sellerKeys.viewingPublicKey);
-
-      bitgoRecipients.push({
-        address: sellerStealth.stealthAddress,
-        amount: highestBid.bidAmount!,
-      });
-
-      // Store stealth announcement for seller
-      await db.insert(stealthAnnouncements).values({
-        recipientAddress: auction.sellerAddress.toLowerCase(),
-        ephemeralPublicKey: sellerStealth.ephemeralPublicKey,
-        stealthAddress: sellerStealth.stealthAddress,
-        auctionId,
-      });
-    } else {
-      console.warn(`Seller ${auction.sellerAddress} has no stealth keys — ETH sent to original address`);
-      bitgoRecipients.push({
-        address: auction.sellerAddress,
-        amount: highestBid.bidAmount!,
-      });
-    }
-
-    // Refund losers to their original addresses
-    for (const deposit of allDeposits) {
-      if (deposit.id !== highestBid.id && deposit.confirmed && deposit.amountWei !== "0") {
-        bitgoRecipients.push({
-          address: deposit.bidderAddress,
-          amount: deposit.amountWei,
-        });
-      }
-    }
-
-    let bitgoTxId = "";
-    if (bitgoRecipients.length > 0) {
-      try {
-        bitgoTxId = await sendMany(auction.bitgoWalletId, bitgoRecipients);
-      } catch (err) {
-        console.error("BitGo sendMany failed:", err);
-        bitgoTxId = `FAILED: ${err instanceof Error ? err.message : "unknown"}`;
-      }
+    // --- 5. ETH settlement via shared payout service ---
+    // executePayout handles: stealth address generation, seller payment, loser refunds, idempotency
+    let payoutResult;
+    try {
+      payoutResult = await executePayout(auctionId);
+      console.log(`[settle] Payout result:`, JSON.stringify(payoutResult));
+    } catch (err) {
+      console.error("[settle] executePayout failed:", err);
+      payoutResult = { status: "error", message: err instanceof Error ? err.message : "unknown" };
     }
 
     return NextResponse.json({
@@ -153,8 +110,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         winningBidWei: highestBid.bidAmount,
         totalBids: committedBids.length,
         declareTxHash,
-        bitgoTxId,
-        refundedBidders: bitgoRecipients.length - 1,
+        payout: payoutResult,
         note: "Winner must call claimWithProof() separately to receive tokens",
       },
     });

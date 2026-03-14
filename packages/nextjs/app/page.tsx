@@ -297,9 +297,9 @@ const AuctionListItem = ({
     args: [BigInt(auctionId)],
   });
 
-  const { data: bidders } = useScaffoldReadContract({
+  const { data: commitCount } = useScaffoldReadContract({
     contractName: "PenumbraAuction",
-    functionName: "getAuctionBidders",
+    functionName: "getCommitCount",
     args: [BigInt(auctionId)],
   });
 
@@ -322,11 +322,9 @@ const AuctionListItem = ({
     tokenAmount: bigint;
     minimumBid: bigint;
     commitDeadline: bigint;
-    revealDeadline: bigint;
-    winner: string;
-    winningBid: bigint;
-    winnerStealthAddress: string;
-    settled: boolean;
+    settleDeadline: bigint;
+    winningNullifier: string;
+    claimed: boolean;
     cancelled: boolean;
   };
 
@@ -336,19 +334,17 @@ const AuctionListItem = ({
     tokenAmount: d.tokenAmount,
     minimumBid: d.minimumBid,
     commitDeadline: d.commitDeadline,
-    revealDeadline: d.revealDeadline,
-    winner: d.winner,
-    winningBid: d.winningBid,
-    winnerStealthAddress: d.winnerStealthAddress,
-    settled: d.settled,
+    settleDeadline: d.settleDeadline,
+    winningNullifier: d.winningNullifier,
+    claimed: d.claimed,
     cancelled: d.cancelled,
   };
 
   const currentPhase = phase as AuctionPhase;
-  const bidderCount = bidders ? (bidders as readonly string[]).length : 0;
+  const bidderCount = commitCount ? Number(commitCount) : 0;
 
   // Apply filters
-  if (filter === "active" && currentPhase !== AuctionPhase.COMMIT && currentPhase !== AuctionPhase.REVEAL) return null;
+  if (filter === "active" && currentPhase !== AuctionPhase.COMMIT && currentPhase !== AuctionPhase.SETTLE) return null;
   if (filter === "ended" && currentPhase !== AuctionPhase.ENDED && currentPhase !== AuctionPhase.CANCELLED) return null;
   if (filter === "mine" && userAddress && auction.seller.toLowerCase() !== userAddress.toLowerCase()) return null;
 

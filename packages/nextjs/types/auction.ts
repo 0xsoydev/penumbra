@@ -1,6 +1,6 @@
 export enum AuctionPhase {
   COMMIT = 0,
-  REVEAL = 1,
+  SETTLE = 1,
   ENDED = 2,
   CANCELLED = 3,
 }
@@ -11,24 +11,23 @@ export type AuctionData = {
   tokenAmount: bigint;
   minimumBid: bigint;
   commitDeadline: bigint;
-  revealDeadline: bigint;
-  winner: string;
-  winningBid: bigint;
-  winnerStealthAddress: string;
-  settled: boolean;
+  settleDeadline: bigint;
+  winningNullifier: string; // bytes32 hex
+  claimed: boolean;
   cancelled: boolean;
 };
 
 export type CommitData = {
   commitHash: string;
-  revealed: boolean;
-  revealedAmount: bigint;
+  exists: boolean;
 };
 
 export type StoredBid = {
   auctionId: number;
   bidAmount: string;
   salt: string;
+  secret: string;
+  nullifier: string;
   committed: boolean;
   revealed: boolean;
 };
@@ -48,7 +47,20 @@ export type AuctionStatusResponse = {
     docCid: string | null;
     createdAt: string;
   };
-  deposits: DepositInfo[];
+  onChain: {
+    phase: string;
+    commitDeadline: string;
+    settleDeadline: string;
+    winnerDeclared: boolean;
+    claimed: boolean;
+    cancelled: boolean;
+    bidCount: number | null;
+  } | null;
+  deposits: {
+    total: number;
+    committed: number;
+    confirmed: number;
+  };
 };
 
 export type StealthAnnouncement = {
@@ -61,14 +73,14 @@ export type StealthAnnouncement = {
 
 export const PHASE_LABELS: Record<AuctionPhase, string> = {
   [AuctionPhase.COMMIT]: "Commit Phase",
-  [AuctionPhase.REVEAL]: "Reveal Phase",
+  [AuctionPhase.SETTLE]: "Settle Phase",
   [AuctionPhase.ENDED]: "Ended",
   [AuctionPhase.CANCELLED]: "Cancelled",
 };
 
 export const PHASE_COLORS: Record<AuctionPhase, string> = {
   [AuctionPhase.COMMIT]: "badge-primary",
-  [AuctionPhase.REVEAL]: "badge-warning",
+  [AuctionPhase.SETTLE]: "badge-warning",
   [AuctionPhase.ENDED]: "badge-success",
   [AuctionPhase.CANCELLED]: "badge-error",
 };

@@ -106,6 +106,17 @@ export async function getWalletBalance(walletId: string): Promise<string> {
   return wallet.balanceString() || "0";
 }
 
+/**
+ * Get wallet spendable balance in wei (confirmed funds only).
+ * BitGo requires funds to be confirmed before they can be sent.
+ */
+export async function getSpendableBalance(walletId: string): Promise<string> {
+  const sdk = getSdk();
+  const coin = sdk.coin(COIN);
+  const wallet = await coin.wallets().get({ id: walletId });
+  return wallet.spendableBalanceString() || "0";
+}
+
 // ----------------------------------------------------------------
 // Sending / Settlement
 // ----------------------------------------------------------------
@@ -164,4 +175,77 @@ export async function refundBidder(walletId: string, toAddress: string, amountWe
 export function verifyWebhook(body: Record<string, unknown>): boolean {
   // Minimal validation — confirm required fields present
   return !!(body.type && body.wallet && body.hash);
+}
+
+// ----------------------------------------------------------------
+// Webhook registration
+// ----------------------------------------------------------------
+
+/**
+ * Register a transfer webhook on a BitGo wallet.
+ * BitGo will POST to `url` whenever a transfer is confirmed.
+ *
+ * @param walletId — the BitGo wallet to monitor
+ * @param url — public HTTPS endpoint (e.g., https://app.vercel.app/api/webhooks/bitgo)
+ * @param numConfirmations — block confirmations before firing (default 1)
+ */
+export async function registerWebhook(
+  walletId: string,
+  url: string,
+  numConfirmations = 1,
+): Promise<{ id: string; type: string; url: string }> {
+  const sdk = getSdk();
+  const coin = sdk.coin(COIN);
+  const wallet = await coin.wallets().get({ id: walletId });
+
+  const result = await wallet.addWebhook({
+    type: "transfer",
+    url,
+    numConfirmations,
+  } as Parameters<typeof wallet.addWebhook>[0]);
+
+  console.log(`[BitGo] Webhook registered for wallet ${walletId}: ${url} (${numConfirmations} confirmations)`);
+  return result as { id: string; type: string; url: string };
+}
+
+/**
+ * List all webhooks on a wallet.
+ */
+export async function listWebhooks(walletId: string): Promise<unknown[]> {
+  const sdk = getSdk();
+  const coin = sdk.coin(COIN);
+  const wallet = await coin.wallets().get({ id: walletId });
+  const result = await wallet.listWebhooks();
+  return (result as { webhooks?: unknown[] })?.webhooks || [];
+}
+
+// ----------------------------------------------------------------
+// Transfer details
+// ----------------------------------------------------------------
+
+/**
+ * Get details of a specific transfer on a wallet.
+ * Used by the webhook handler to determine which deposit address received ETH
+ * and how much.
+ */
+export async function getTransfer(
+  walletId: string,
+  transferId: string,
+): Promise<{
+  id: string;
+  txid: string;
+  state: string;
+  entries: Array<{ address: string; value: number; valueString: string }>;
+}> {
+  const sdk = getSdk();
+  const coin = sdk.coin(COIN);
+  const wallet = await coin.wallets().get({ id: walletId });
+
+  const transfer = await wallet.getTransfer({ id: transferId });
+  return transfer as {
+    id: string;
+    txid: string;
+    state: string;
+    entries: Array<{ address: string; value: number; valueString: string }>;
+  };
 }

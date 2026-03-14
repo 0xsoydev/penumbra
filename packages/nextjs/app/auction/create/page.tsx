@@ -5,11 +5,10 @@ import { useRouter } from "next/navigation";
 import type { NextPage } from "next";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
 
 const PENUMBRA_TOKEN_ADDRESS = "0x5dfbd7e43d207f3c1c67e5d81a28593bec0981e7";
-const PENUMBRA_AUCTION_ADDRESS = "0xdfa35b4e287a91468e0308f8475adf11e5e59a5e";
 
 const CreateAuction: NextPage = () => {
   const router = useRouter();
@@ -19,9 +18,13 @@ const CreateAuction: NextPage = () => {
   const [tokenAmount, setTokenAmount] = useState("");
   const [minimumBid, setMinimumBid] = useState("");
   const [commitMinutes, setCommitMinutes] = useState("10");
-  const [revealMinutes, setRevealMinutes] = useState("10");
+  const [settleMinutes, setSettleMinutes] = useState("10");
   const [ensName, setEnsName] = useState("");
   const [docCid, setDocCid] = useState("");
+
+  // Get the deployed PenumbraAuction address dynamically
+  const { data: auctionContractData } = useDeployedContractInfo({ contractName: "PenumbraAuction" });
+  const auctionAddress = auctionContractData?.address;
 
   const [step, setStep] = useState<"form" | "approving" | "creating" | "registering" | "done">("form");
   const [createdAuctionId, setCreatedAuctionId] = useState<number | null>(null);
@@ -37,7 +40,7 @@ const CreateAuction: NextPage = () => {
   const { data: allowance } = useScaffoldReadContract({
     contractName: "PenumbraToken",
     functionName: "allowance",
-    args: [address, PENUMBRA_AUCTION_ADDRESS],
+    args: [address, auctionAddress],
   });
 
   // Write hooks
@@ -60,14 +63,15 @@ const CreateAuction: NextPage = () => {
   const hasEnoughBalance = tokenBalance !== undefined && tokenAmountWei > 0n && tokenBalance >= tokenAmountWei;
 
   const handleApprove = async () => {
-    if (!tokenAmount) return;
+    if (!tokenAmount || !auctionAddress) return;
     setStep("approving");
     try {
       await writeToken({
         functionName: "approve",
-        args: [PENUMBRA_AUCTION_ADDRESS, tokenAmountWei],
+        args: [auctionAddress, tokenAmountWei],
       });
       notification.success("Token approval successful!");
+      setStep("form");
     } catch (e: unknown) {
       console.error("Approve error:", e);
       notification.error("Approval failed");
@@ -76,13 +80,13 @@ const CreateAuction: NextPage = () => {
   };
 
   const handleCreate = async () => {
-    if (!tokenAmount || !minimumBid || !commitMinutes || !revealMinutes) {
+    if (!tokenAmount || !minimumBid || !commitMinutes || !settleMinutes) {
       notification.error("Please fill all required fields");
       return;
     }
 
     const commitDuration = BigInt(Number(commitMinutes) * 60);
-    const revealDuration = BigInt(Number(revealMinutes) * 60);
+    const settleDuration = BigInt(Number(settleMinutes) * 60);
     const minimumBidWei = parseEther(minimumBid);
     const auctionId = nextAuctionId !== undefined ? Number(nextAuctionId) : null;
 
@@ -90,7 +94,7 @@ const CreateAuction: NextPage = () => {
     try {
       await writeAuction({
         functionName: "createAuction",
-        args: [tokenAddress, tokenAmountWei, minimumBidWei, commitDuration, revealDuration],
+        args: [tokenAddress, tokenAmountWei, minimumBidWei, commitDuration, settleDuration],
       });
 
       notification.success("Auction created on-chain!");
@@ -328,12 +332,12 @@ const CreateAuction: NextPage = () => {
               </div>
               <div className="form-control">
                 <label className="label px-0 pt-0">
-                  <span className="label-text font-black text-lg text-black uppercase">Reveal (min)</span>
+                  <span className="label-text font-black text-lg text-black uppercase">Settle (min)</span>
                 </label>
                 <input
                   type="number"
-                  value={revealMinutes}
-                  onChange={e => setRevealMinutes(e.target.value)}
+                  value={settleMinutes}
+                  onChange={e => setSettleMinutes(e.target.value)}
                   placeholder="10"
                   min="1"
                   className="input bg-white border-2 border-black rounded-none focus:outline-none focus:ring-0 focus:border-[#0066FF] focus:shadow-[4px_4px_0px_#0066FF] text-black font-bold text-lg w-full transition-all"
@@ -399,7 +403,7 @@ const CreateAuction: NextPage = () => {
                     !tokenAmount ||
                     !minimumBid ||
                     !commitMinutes ||
-                    !revealMinutes ||
+                    !settleMinutes ||
                     !hasEnoughBalance ||
                     step !== "form"
                   }
@@ -440,9 +444,9 @@ const CreateAuction: NextPage = () => {
               <ul className="text-sm font-bold text-black/80 space-y-1 ml-1">
                 <li>1. Approve token transfer to the auction contract</li>
                 <li>2. Create the auction (tokens are locked in the contract)</li>
-                <li>3. Bidders commit sealed bids during the commit phase</li>
-                <li>4. Bidders reveal their bids during the reveal phase</li>
-                <li>5. Highest bidder wins, settlement sends tokens via stealth address</li>
+                <li>3. Bidders submit sealed bids privately during the commit phase</li>
+                <li>4. Backend settles the auction off-chain — bid amounts are never revealed on-chain</li>
+                <li>5. Winner claims tokens with a ZK proof to a stealth address</li>
               </ul>
             </div>
           </div>

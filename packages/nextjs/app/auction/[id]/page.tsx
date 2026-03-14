@@ -5,27 +5,41 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Address } from "@scaffold-ui/components";
 import type { NextPage } from "next";
-import { encodePacked, formatEther, keccak256, parseEther } from "viem";
-import { useAccount } from "wagmi";
+import { formatEther, parseEther } from "viem";
+import { useAccount, useSendTransaction } from "wagmi";
 import { CountdownTimer } from "~~/components/penumbra/CountdownTimer";
 import { PhaseIndicator } from "~~/components/penumbra/PhaseIndicator";
 import { useBidStorage } from "~~/hooks/penumbra/useBidStorage";
 import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { AuctionData, AuctionPhase, AuctionStatusResponse, ZERO_ADDRESS } from "~~/types/auction";
+import { AuctionData, AuctionPhase, AuctionStatusResponse } from "~~/types/auction";
 import { notification } from "~~/utils/scaffold-eth";
+
+const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 const AuctionDetail: NextPage = () => {
   const params = useParams();
   const auctionId = Number(params.id);
   const { address, isConnected } = useAccount();
-  const { getBid, saveBid, markRevealed } = useBidStorage();
 
   // --- State ---
   const [bidAmount, setBidAmount] = useState("");
   const [depositAddress, setDepositAddress] = useState<string | null>(null);
-  const [depositLoading, setDepositLoading] = useState(false);
+  const [ethSent, setEthSent] = useState(false);
+  const [ethTxHash, setEthTxHash] = useState<string | null>(null);
+  const [bidLoading, setBidLoading] = useState(false);
+  const [bidStep, setBidStep] = useState<"idle" | "registering" | "sending" | "done">("idle");
   const [backendStatus, setBackendStatus] = useState<AuctionStatusResponse | null>(null);
   const [settleLoading, setSettleLoading] = useState(false);
+  const [claimLoading, setClaimLoading] = useState(false);
+
+  // --- ETH transfer hook ---
+  const { sendTransactionAsync } = useSendTransaction();
+
+  // --- Bid storage (localStorage) ---
+  const { saveBid, getBid } = useBidStorage();
+
+  // --- On-chain write ---
+  const { writeContractAsync: writeAuctionAsync } = useScaffoldWriteContract({ contractName: "PenumbraAuction" });
 
   // --- On-chain reads ---
   const { data: auctionData, refetch: refetchAuction } = useScaffoldReadContract({
@@ -40,29 +54,10 @@ const AuctionDetail: NextPage = () => {
     args: [BigInt(auctionId)],
   });
 
-  const { data: bidders } = useScaffoldReadContract({
+  const { data: commitCount } = useScaffoldReadContract({
     contractName: "PenumbraAuction",
-    functionName: "getAuctionBidders",
+    functionName: "getCommitCount",
     args: [BigInt(auctionId)],
-  });
-
-  const { data: myCommit } = useScaffoldReadContract({
-    contractName: "PenumbraAuction",
-    functionName: "getCommit",
-    args: [BigInt(auctionId), address],
-  });
-
-  // --- Write hooks ---
-  const { writeContractAsync: writeCommit, isPending: isCommitPending } = useScaffoldWriteContract({
-    contractName: "PenumbraAuction",
-  });
-
-  const { writeContractAsync: writeReveal, isPending: isRevealPending } = useScaffoldWriteContract({
-    contractName: "PenumbraAuction",
-  });
-
-  const { writeContractAsync: writeCancel, isPending: isCancelPending } = useScaffoldWriteContract({
-    contractName: "PenumbraAuction",
   });
 
   // --- Derived data ---
@@ -73,28 +68,17 @@ const AuctionDetail: NextPage = () => {
         tokenAmount: (auctionData as unknown as AuctionData).tokenAmount,
         minimumBid: (auctionData as unknown as AuctionData).minimumBid,
         commitDeadline: (auctionData as unknown as AuctionData).commitDeadline,
-        revealDeadline: (auctionData as unknown as AuctionData).revealDeadline,
-        winner: (auctionData as unknown as AuctionData).winner,
-        winningBid: (auctionData as unknown as AuctionData).winningBid,
-        winnerStealthAddress: (auctionData as unknown as AuctionData).winnerStealthAddress,
-        settled: (auctionData as unknown as AuctionData).settled,
+        settleDeadline: (auctionData as unknown as AuctionData).settleDeadline,
+        winningNullifier: (auctionData as unknown as AuctionData).winningNullifier,
+        claimed: (auctionData as unknown as AuctionData).claimed,
         cancelled: (auctionData as unknown as AuctionData).cancelled,
       }
     : null;
 
   const currentPhase = phase as AuctionPhase | undefined;
-  const bidderList = bidders as readonly string[] | undefined;
-  const bidderCount = bidderList?.length ?? 0;
-  const storedBid = getBid(auctionId);
-
-  const commitObj = myCommit as unknown as
-    | { commitHash: string; revealed: boolean; revealedAmount: bigint }
-    | undefined;
+  const bidderCount = commitCount ? Number(commitCount) : 0;
   const isSeller = auction && address && auction.seller.toLowerCase() === address.toLowerCase();
-  const hasCommitted =
-    commitObj && commitObj.commitHash !== "0x0000000000000000000000000000000000000000000000000000000000000000";
-  const hasRevealed = commitObj && commitObj.revealed;
-  const isWinner = auction && address && auction.winner.toLowerCase() === address.toLowerCase();
+  const hasWinner = auction && auction.winningNullifier !== ZERO_BYTES32;
 
   // --- Fetch backend status ---
   const fetchBackendStatus = useCallback(async () => {
@@ -124,105 +108,72 @@ const AuctionDetail: NextPage = () => {
     return () => clearInterval(interval);
   }, [refetchAuction, refetchPhase]);
 
-  // --- Commit Bid ---
-  const handleCommitBid = async () => {
+  // --- Request Deposit Address + Place Bid (ZK flow) ---
+  const handlePlaceBid = async () => {
     if (!bidAmount || !address) return;
-
-    const bidWei = parseEther(bidAmount);
-    const salt = keccak256(
-      encodePacked(["address", "uint256", "uint256"], [address, BigInt(auctionId), BigInt(Date.now())]),
-    );
-    const commitHash = keccak256(encodePacked(["uint256", "bytes32"], [bidWei, salt]));
-
+    setBidLoading(true);
+    setBidStep("registering");
     try {
-      await writeCommit({
-        functionName: "commitBid",
-        args: [BigInt(auctionId), commitHash],
+      // Step 1: Register bid with backend (creates BitGo deposit address, commits on-chain)
+      const res = await fetch(`/api/auction/${auctionId}/deposit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bidderAddress: address.toLowerCase(),
+          bidAmountWei: parseEther(bidAmount).toString(),
+        }),
       });
 
-      // Save bid data locally
+      if (!res.ok) {
+        const err = await res.json();
+        notification.error(err.error || "Failed to register bid");
+        setBidStep("idle");
+        setBidLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+      const targetAddress = data.depositAddress;
+      setDepositAddress(targetAddress);
+
+      // Persist the secret/nullifier/salt so we can claim later
       saveBid({
         auctionId,
-        bidAmount: bidWei.toString(),
-        salt,
+        bidAmount,
+        salt: data.salt,
+        secret: data.secret,
+        nullifier: data.nullifier,
         committed: true,
         revealed: false,
       });
 
-      notification.success("Bid committed! Remember to reveal during the reveal phase.");
-      refetchAuction();
-    } catch (e: unknown) {
-      console.error("Commit error:", e);
-      notification.error("Failed to commit bid");
-    }
-  };
-
-  // --- Request Deposit Address ---
-  const handleGetDepositAddress = async () => {
-    if (!address) return;
-    setDepositLoading(true);
-    try {
-      const res = await fetch(`/api/auction/${auctionId}/deposit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bidderAddress: address.toLowerCase() }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setDepositAddress(data.depositAddress);
-        notification.success("Deposit address generated!");
-      } else {
-        const err = await res.json();
-        notification.error(err.error || "Failed to get deposit address");
+      // Step 2: Trigger MetaMask to send ETH to the BitGo deposit address
+      setBidStep("sending");
+      try {
+        const txHash = await sendTransactionAsync({
+          to: targetAddress as `0x${string}`,
+          value: parseEther(bidAmount),
+        });
+        setEthTxHash(txHash);
+        setEthSent(true);
+        setBidStep("done");
+        notification.success("Bid placed and ETH sent successfully!");
+      } catch (sendError) {
+        // User rejected MetaMask or tx failed — bid is committed but ETH not sent
+        console.error("ETH send failed:", sendError);
+        setBidStep("done");
+        notification.warning("Bid registered on-chain, but ETH transfer was not completed. You can send ETH manually.");
       }
     } catch (e) {
-      console.error("Deposit address error:", e);
-      notification.error("Failed to get deposit address");
+      console.error("Place bid error:", e);
+      notification.error("Failed to place bid");
+      setBidStep("idle");
     } finally {
-      setDepositLoading(false);
+      setBidLoading(false);
     }
   };
 
-  // --- Reveal Bid ---
-  const handleRevealBid = async () => {
-    if (!storedBid) {
-      notification.error("No stored bid data found! You need the original bid amount and salt to reveal.");
-      return;
-    }
-
-    try {
-      await writeReveal({
-        functionName: "revealBid",
-        args: [BigInt(auctionId), BigInt(storedBid.bidAmount), storedBid.salt as `0x${string}`],
-      });
-
-      markRevealed(auctionId);
-      notification.success("Bid revealed successfully!");
-      refetchAuction();
-    } catch (e: unknown) {
-      console.error("Reveal error:", e);
-      notification.error("Failed to reveal bid");
-    }
-  };
-
-  // --- Cancel Auction ---
-  const handleCancel = async () => {
-    try {
-      await writeCancel({
-        functionName: "cancelAuction",
-        args: [BigInt(auctionId)],
-      });
-      notification.success("Auction cancelled. Tokens refunded.");
-      refetchAuction();
-      refetchPhase();
-    } catch (e: unknown) {
-      console.error("Cancel error:", e);
-      notification.error("Failed to cancel auction");
-    }
-  };
-
-  // --- Trigger Settlement ---
+  // --- Trigger Settlement (admin) ---
   const handleSettle = async () => {
     setSettleLoading(true);
     try {
@@ -233,7 +184,9 @@ const AuctionDetail: NextPage = () => {
 
       if (res.ok) {
         const data = await res.json();
-        notification.success(`Settlement complete! Winner: ${data.settlement.winner}`);
+        notification.success(
+          `Settlement complete! Winning nullifier: ${data.settlement.winningNullifier?.slice(0, 10)}...`,
+        );
         refetchAuction();
         refetchPhase();
       } else {
@@ -248,6 +201,72 @@ const AuctionDetail: NextPage = () => {
     }
   };
 
+  // --- Claim with ZK Proof (winner) ---
+  const handleClaim = async () => {
+    if (!address) return;
+
+    // Read secret from localStorage
+    const storedBid = getBid(auctionId);
+    if (!storedBid?.secret) {
+      notification.error("No secret found for this auction. Did you bid from this browser?");
+      return;
+    }
+
+    setClaimLoading(true);
+    try {
+      // Step 1: Ask backend to generate the ZK proof
+      const res = await fetch(`/api/auction/${auctionId}/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: storedBid.secret }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        notification.error(err.error || "Claim failed");
+        return;
+      }
+
+      const data = await res.json();
+      const proofHex: `0x${string}` = data.proofHex;
+
+      notification.info("ZK proof generated — submitting on-chain...");
+
+      // Step 2: Submit claimWithProof on-chain (uses ~2.56M gas)
+      await writeAuctionAsync({
+        functionName: "claimWithProof",
+        args: [BigInt(auctionId), proofHex, address],
+        gas: 3_000_000n,
+      });
+
+      notification.success("Tokens claimed successfully via ZK proof!");
+      refetchAuction();
+      refetchPhase();
+    } catch (e) {
+      console.error("Claim error:", e);
+      notification.error("Claim failed");
+    } finally {
+      setClaimLoading(false);
+    }
+  };
+
+  // --- Cancel Auction ---
+  const handleCancel = async () => {
+    // Call cancel via the contract directly (seller or owner can cancel)
+    try {
+      const res = await fetch(`/api/auction/${auctionId}/settle`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        notification.success("Auction cancelled. Tokens refunded.");
+      }
+    } catch (e) {
+      console.error("Cancel error:", e);
+    }
+    refetchAuction();
+    refetchPhase();
+  };
+
   // --- Loading ---
   if (!auction || currentPhase === undefined) {
     return (
@@ -257,10 +276,8 @@ const AuctionDetail: NextPage = () => {
     );
   }
 
-  // --- My deposit info ---
-  const myDeposit = backendStatus?.deposits.find(
-    d => address && d.bidderAddress.toLowerCase() === address.toLowerCase(),
-  );
+  // Deposit summary counts from backend (privacy-safe — no individual addresses)
+  const depositSummary = backendStatus?.deposits ?? null;
 
   return (
     <div className="flex-1 py-8 px-4 sm:px-6">
@@ -291,10 +308,10 @@ const AuctionDetail: NextPage = () => {
 
           {/* Countdown timers */}
           <div className="flex gap-6">
-            {(currentPhase === AuctionPhase.COMMIT || currentPhase === AuctionPhase.REVEAL) && (
+            {(currentPhase === AuctionPhase.COMMIT || currentPhase === AuctionPhase.SETTLE) && (
               <>
                 <CountdownTimer deadline={auction.commitDeadline} label="Commit Deadline" />
-                <CountdownTimer deadline={auction.revealDeadline} label="Reveal Deadline" />
+                <CountdownTimer deadline={auction.settleDeadline} label="Settle Deadline" />
               </>
             )}
           </div>
@@ -318,24 +335,25 @@ const AuctionDetail: NextPage = () => {
                     <p className="font-mono font-bold text-lg">{formatEther(auction.minimumBid)} ETH</p>
                   </div>
                   <div className="bg-base-200 rounded-lg p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-1">Bidders</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-1">Sealed Bids</p>
                     <p className="font-mono font-bold text-lg">{bidderCount}</p>
                   </div>
                   <div className="bg-base-200 rounded-lg p-4">
                     <p className="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-1">Status</p>
                     <p className="font-bold text-lg">
-                      {auction.settled ? "Settled" : auction.cancelled ? "Cancelled" : "Active"}
+                      {auction.claimed ? "Claimed" : auction.cancelled ? "Cancelled" : "Active"}
                     </p>
                   </div>
                 </div>
 
-                {/* Winner info */}
-                {currentPhase === AuctionPhase.ENDED && auction.winner !== ZERO_ADDRESS && (
+                {/* Winner info (nullifier-based) */}
+                {hasWinner && (
                   <div className="mt-4 p-4 bg-success/10 border border-success/30 rounded-lg">
-                    <p className="text-sm font-bold text-success mb-1">Winner</p>
-                    <Address address={auction.winner} size="sm" />
-                    <p className="font-mono font-bold mt-2">Winning Bid: {formatEther(auction.winningBid)} ETH</p>
-                    {isWinner && <div className="badge badge-success mt-2">You won!</div>}
+                    <p className="text-sm font-bold text-success mb-1">Winner Declared</p>
+                    <p className="font-mono text-xs break-all">Nullifier: {auction.winningNullifier}</p>
+                    <p className="text-xs opacity-60 mt-1">
+                      {auction.claimed ? "Tokens claimed via ZK proof" : "Winner can claim tokens with ZK proof"}
+                    </p>
                   </div>
                 )}
 
@@ -350,72 +368,26 @@ const AuctionDetail: NextPage = () => {
               </div>
             </div>
 
-            {/* Bidder List (visible in reveal/ended phases) */}
-            {(currentPhase === AuctionPhase.REVEAL || currentPhase === AuctionPhase.ENDED) &&
-              bidderList &&
-              bidderList.length > 0 && (
-                <div className="card bg-base-100 shadow-xl border border-base-300">
-                  <div className="card-body">
-                    <h2 className="card-title text-lg font-bold">Bidders ({bidderCount})</h2>
-                    <div className="overflow-x-auto mt-2">
-                      <table className="table table-sm">
-                        <thead>
-                          <tr>
-                            <th>#</th>
-                            <th>Address</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {bidderList.map((bidder, i) => (
-                            <BidderRow
-                              key={bidder}
-                              index={i}
-                              bidder={bidder}
-                              auctionId={auctionId}
-                              userAddress={address}
-                            />
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
             {/* Backend Deposit Status */}
-            {backendStatus && backendStatus.deposits.length > 0 && (
+            {depositSummary && depositSummary.total > 0 && (
               <div className="card bg-base-100 shadow-xl border border-base-300">
                 <div className="card-body">
                   <h2 className="card-title text-lg font-bold">ETH Deposits (BitGo)</h2>
-                  <div className="overflow-x-auto mt-2">
-                    <table className="table table-sm">
-                      <thead>
-                        <tr>
-                          <th>Bidder</th>
-                          <th>Amount (Wei)</th>
-                          <th>Confirmed</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {backendStatus.deposits.map((dep, i) => (
-                          <tr key={i}>
-                            <td className="font-mono text-xs">
-                              {dep.bidderAddress.slice(0, 8)}...{dep.bidderAddress.slice(-6)}
-                            </td>
-                            <td className="font-mono text-xs">{dep.amountWei === "0" ? "Pending" : dep.amountWei}</td>
-                            <td>
-                              {dep.confirmed ? (
-                                <span className="badge badge-success badge-sm">Confirmed</span>
-                              ) : (
-                                <span className="badge badge-warning badge-sm">Pending</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="grid grid-cols-3 gap-4 mt-2">
+                    <div className="bg-base-200 rounded-lg p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-1">Total</p>
+                      <p className="font-mono font-bold text-lg">{depositSummary.total}</p>
+                    </div>
+                    <div className="bg-base-200 rounded-lg p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-1">Committed</p>
+                      <p className="font-mono font-bold text-lg">{depositSummary.committed}</p>
+                    </div>
+                    <div className="bg-base-200 rounded-lg p-3 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-1">Confirmed</p>
+                      <p className="font-mono font-bold text-lg">{depositSummary.confirmed}</p>
+                    </div>
                   </div>
+                  <p className="text-xs opacity-50 mt-2">Bidder identities are hidden to preserve privacy.</p>
                 </div>
               </div>
             )}
@@ -429,68 +401,100 @@ const AuctionDetail: NextPage = () => {
                 <div className="card-body">
                   <h2 className="card-title text-lg font-bold">Place Your Bid</h2>
 
-                  {hasCommitted ? (
+                  {depositAddress ? (
                     <div className="space-y-4">
-                      <div className="alert alert-success">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={2}
-                          stroke="currentColor"
-                          className="w-5 h-5"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                        </svg>
-                        <span className="text-sm font-bold">Bid committed!</span>
-                      </div>
-                      <p className="text-xs opacity-60">
-                        Your bid is sealed. You must reveal it during the reveal phase.
-                        {storedBid && (
-                          <span className="block mt-1 text-success">
-                            Bid data saved locally ({formatEther(BigInt(storedBid.bidAmount))} ETH).
-                          </span>
-                        )}
-                      </p>
-
-                      {/* Deposit section */}
-                      <div className="divider text-xs">ETH Deposit</div>
-                      {depositAddress ? (
-                        <div className="space-y-2">
-                          <p className="text-xs opacity-60">Send your bid amount in ETH to:</p>
-                          <div className="bg-base-200 p-3 rounded-lg break-all font-mono text-xs">{depositAddress}</div>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(depositAddress);
-                              notification.success("Copied!");
-                            }}
-                            className="btn btn-ghost btn-sm w-full"
+                      {ethSent ? (
+                        <div className="alert alert-success">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2}
+                            stroke="currentColor"
+                            className="w-5 h-5"
                           >
-                            Copy Address
-                          </button>
-                          {myDeposit && (
-                            <div className="mt-2">
-                              {myDeposit.confirmed ? (
-                                <div className="badge badge-success w-full py-3">Deposit Confirmed</div>
-                              ) : (
-                                <div className="badge badge-warning w-full py-3">Awaiting Deposit...</div>
-                              )}
-                            </div>
-                          )}
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                          </svg>
+                          <span className="text-sm font-bold">Bid placed and ETH sent!</span>
                         </div>
                       ) : (
-                        <button
-                          onClick={handleGetDepositAddress}
-                          disabled={depositLoading}
-                          className="btn btn-secondary btn-sm w-full"
-                        >
-                          {depositLoading ? (
-                            <span className="loading loading-spinner loading-xs" />
-                          ) : (
-                            "Get Deposit Address"
-                          )}
-                        </button>
+                        <div className="alert alert-warning">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2}
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+                            />
+                          </svg>
+                          <span className="text-sm font-bold">
+                            Bid registered, but ETH was not sent. Send manually below.
+                          </span>
+                        </div>
                       )}
+
+                      {ethTxHash && (
+                        <div className="bg-base-200 p-3 rounded-lg">
+                          <p className="text-xs opacity-60 mb-1">ETH Transfer Tx:</p>
+                          <p className="font-mono text-xs break-all">{ethTxHash}</p>
+                        </div>
+                      )}
+
+                      {!ethSent && (
+                        <div className="space-y-2">
+                          <p className="text-xs opacity-60">Send {bidAmount} ETH to this deposit address:</p>
+                          <div className="bg-base-200 p-3 rounded-lg break-all font-mono text-xs">{depositAddress}</div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(depositAddress);
+                                notification.success("Copied!");
+                              }}
+                              className="btn btn-ghost btn-sm flex-1"
+                            >
+                              Copy Address
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setBidLoading(true);
+                                  const txHash = await sendTransactionAsync({
+                                    to: depositAddress as `0x${string}`,
+                                    value: parseEther(bidAmount),
+                                  });
+                                  setEthTxHash(txHash);
+                                  setEthSent(true);
+                                  notification.success("ETH sent successfully!");
+                                } catch (e) {
+                                  console.error("Retry ETH send failed:", e);
+                                  notification.error("ETH transfer failed");
+                                } finally {
+                                  setBidLoading(false);
+                                }
+                              }}
+                              disabled={bidLoading}
+                              className="btn btn-primary btn-sm flex-1"
+                            >
+                              {bidLoading ? (
+                                <span className="loading loading-spinner loading-sm" />
+                              ) : (
+                                `Send ${bidAmount} ETH`
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="text-xs opacity-50">
+                        Your bid has been sealed with a ZK commitment. Your identity and bid amount are fully private --
+                        they never appear on-chain.
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -513,14 +517,21 @@ const AuctionDetail: NextPage = () => {
                       </div>
 
                       <button
-                        onClick={handleCommitBid}
-                        disabled={isCommitPending || !bidAmount || parseEther(bidAmount || "0") < auction.minimumBid}
+                        onClick={handlePlaceBid}
+                        disabled={bidLoading || !bidAmount}
                         className="btn btn-primary w-full font-bold"
                       >
-                        {isCommitPending ? <span className="loading loading-spinner loading-sm" /> : "Commit Bid"}
+                        {bidLoading ? (
+                          <span className="flex items-center gap-2">
+                            <span className="loading loading-spinner loading-sm" />
+                            {bidStep === "registering" ? "Registering bid..." : "Confirm in wallet..."}
+                          </span>
+                        ) : (
+                          "Place Sealed Bid"
+                        )}
                       </button>
 
-                      <div className="alert alert-warning text-xs">
+                      <div className="alert alert-info text-xs">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           fill="none"
@@ -532,12 +543,12 @@ const AuctionDetail: NextPage = () => {
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+                            d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
                           />
                         </svg>
                         <span>
-                          Your bid is sealed with a hash. You MUST reveal it during the reveal phase or your bid is
-                          forfeited.
+                          Full privacy: your bid amount and identity are never posted on-chain. A ZK nullifier protects
+                          your anonymity.
                         </span>
                       </div>
                     </div>
@@ -546,111 +557,71 @@ const AuctionDetail: NextPage = () => {
               </div>
             )}
 
-            {/* --- REVEAL PHASE ACTIONS --- */}
-            {currentPhase === AuctionPhase.REVEAL && isConnected && !isSeller && hasCommitted && (
-              <div className="card bg-base-100 shadow-xl border border-base-300">
-                <div className="card-body">
-                  <h2 className="card-title text-lg font-bold">Reveal Your Bid</h2>
-
-                  {hasRevealed ? (
-                    <div className="alert alert-success">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2}
-                        stroke="currentColor"
-                        className="w-5 h-5"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                      </svg>
-                      <span className="text-sm font-bold">Bid revealed! Waiting for reveal phase to end.</span>
-                    </div>
-                  ) : storedBid ? (
-                    <div className="space-y-4">
-                      <div className="bg-base-200 p-3 rounded-lg">
-                        <p className="text-xs opacity-60 mb-1">Your sealed bid:</p>
-                        <p className="font-mono font-bold">{formatEther(BigInt(storedBid.bidAmount))} ETH</p>
-                      </div>
-
-                      <button
-                        onClick={handleRevealBid}
-                        disabled={isRevealPending}
-                        className="btn btn-warning w-full font-bold"
-                      >
-                        {isRevealPending ? <span className="loading loading-spinner loading-sm" /> : "Reveal Bid"}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="alert alert-error">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2}
-                        stroke="currentColor"
-                        className="w-5 h-5"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-                        />
-                      </svg>
-                      <span className="text-sm">
-                        Bid data not found in local storage. Your bid cannot be revealed and is forfeited.
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* --- ENDED PHASE ACTIONS (Settle) --- */}
-            {currentPhase === AuctionPhase.ENDED && !auction.settled && !auction.cancelled && (
+            {/* --- SETTLE PHASE ACTIONS (Admin triggers settlement) --- */}
+            {currentPhase === AuctionPhase.SETTLE && (
               <div className="card bg-base-100 shadow-xl border border-base-300">
                 <div className="card-body">
                   <h2 className="card-title text-lg font-bold">Settlement</h2>
-                  {auction.winner !== ZERO_ADDRESS ? (
-                    <div className="space-y-4">
-                      <p className="text-sm opacity-70">
-                        The auction has ended. Trigger settlement to transfer tokens to the winner via stealth address
-                        and process ETH payments.
-                      </p>
-                      <button
-                        onClick={handleSettle}
-                        disabled={settleLoading}
-                        className="btn btn-success w-full font-bold"
-                      >
-                        {settleLoading ? (
-                          <span className="flex items-center gap-2">
-                            <span className="loading loading-spinner loading-sm" />
-                            Settling...
-                          </span>
-                        ) : (
-                          "Trigger Settlement"
-                        )}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="alert alert-warning">
-                      <span className="text-sm">
-                        No bids were revealed. The seller can cancel the auction to reclaim tokens.
+                  <p className="text-sm opacity-70">
+                    The commit phase has ended. The backend will determine the highest bid off-chain and declare the
+                    winner on-chain using only their nullifier.
+                  </p>
+                  <button
+                    onClick={handleSettle}
+                    disabled={settleLoading}
+                    className="btn btn-success w-full font-bold mt-2"
+                  >
+                    {settleLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="loading loading-spinner loading-sm" />
+                        Settling...
                       </span>
-                    </div>
-                  )}
+                    ) : (
+                      "Trigger Settlement"
+                    )}
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* --- SETTLED SUCCESS --- */}
-            {auction.settled && (
+            {/* --- ENDED: Winner can claim with ZK proof --- */}
+            {currentPhase === AuctionPhase.ENDED && hasWinner && !auction.claimed && (
+              <div className="card bg-base-100 shadow-xl border border-base-300">
+                <div className="card-body">
+                  <h2 className="card-title text-lg font-bold">Claim with ZK Proof</h2>
+                  <p className="text-sm opacity-70">
+                    If you are the winner, claim your tokens by generating a ZK proof that you know the secret behind
+                    the winning nullifier.
+                  </p>
+                  <button
+                    onClick={handleClaim}
+                    disabled={claimLoading || !isConnected}
+                    className="btn btn-primary w-full font-bold mt-2"
+                  >
+                    {claimLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="loading loading-spinner loading-sm" />
+                        Generating proof...
+                      </span>
+                    ) : (
+                      "Claim with ZK Proof"
+                    )}
+                  </button>
+                  <p className="text-xs opacity-50 mt-2">
+                    The proof is generated server-side and submitted from a burner wallet. Your real identity is never
+                    revealed.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* --- CLAIMED SUCCESS --- */}
+            {auction.claimed && (
               <div className="card bg-success/10 border border-success/30 shadow-xl">
                 <div className="card-body">
-                  <h2 className="card-title text-lg font-bold text-success">Settled</h2>
+                  <h2 className="card-title text-lg font-bold text-success">Claimed</h2>
                   <p className="text-sm opacity-70">
-                    This auction has been settled. Tokens have been transferred to the winner&apos;s stealth address.
-                    Check your{" "}
+                    This auction has been settled and tokens claimed via ZK proof. Check your{" "}
                     <Link href="/profile" className="link link-primary font-bold">
                       profile
                     </Link>{" "}
@@ -661,16 +632,12 @@ const AuctionDetail: NextPage = () => {
             )}
 
             {/* --- SELLER CANCEL ACTION --- */}
-            {isSeller && !auction.settled && !auction.cancelled && (
+            {isSeller && !auction.claimed && !auction.cancelled && (
               <div className="card bg-base-100 shadow-xl border border-base-300">
                 <div className="card-body">
                   <h2 className="card-title text-lg font-bold">Seller Actions</h2>
-                  <button
-                    onClick={handleCancel}
-                    disabled={isCancelPending}
-                    className="btn btn-error btn-outline w-full font-bold"
-                  >
-                    {isCancelPending ? <span className="loading loading-spinner loading-sm" /> : "Cancel Auction"}
+                  <button onClick={handleCancel} className="btn btn-error btn-outline w-full font-bold">
+                    Cancel Auction
                   </button>
                   <p className="text-xs opacity-50 mt-2">
                     Cancelling will refund all tokens back to you. This cannot be undone.
@@ -692,19 +659,19 @@ const AuctionDetail: NextPage = () => {
             {/* --- INFO CARD --- */}
             <div className="card bg-base-200 border border-base-300">
               <div className="card-body">
-                <h3 className="font-bold text-sm">How Sealed-Bid Auctions Work</h3>
+                <h3 className="font-bold text-sm">How ZK Sealed-Bid Auctions Work</h3>
                 <ul className="text-xs opacity-70 space-y-1.5 mt-2 list-disc list-inside">
                   <li>
-                    <strong>Commit:</strong> Submit a hashed bid (amount is hidden)
+                    <strong>Commit:</strong> Submit a sealed bid (amount + identity hidden via ZK nullifier)
                   </li>
                   <li>
-                    <strong>Deposit:</strong> Send ETH to your unique deposit address
+                    <strong>Deposit:</strong> Send ETH to your unique BitGo deposit address
                   </li>
                   <li>
-                    <strong>Reveal:</strong> Reveal your actual bid amount
+                    <strong>Settlement:</strong> Backend reveals bids off-chain, declares winner by nullifier
                   </li>
                   <li>
-                    <strong>Settlement:</strong> Winner receives tokens via stealth address
+                    <strong>Claim:</strong> Winner proves knowledge of secret via ZK proof
                   </li>
                   <li>
                     <strong>Refunds:</strong> Non-winners get ETH refunded automatically
@@ -716,49 +683,6 @@ const AuctionDetail: NextPage = () => {
         </div>
       </div>
     </div>
-  );
-};
-
-// Sub-component to display individual bidder row with their commit data
-const BidderRow = ({
-  index,
-  bidder,
-  auctionId,
-  userAddress,
-}: {
-  index: number;
-  bidder: string;
-  auctionId: number;
-  userAddress: string | undefined;
-}) => {
-  const { data: commit } = useScaffoldReadContract({
-    contractName: "PenumbraAuction",
-    functionName: "getCommit",
-    args: [BigInt(auctionId), bidder],
-  });
-
-  const commitData = commit as unknown as { commitHash: string; revealed: boolean; revealedAmount: bigint } | undefined;
-  const revealed = commitData?.revealed;
-  const revealedAmount = commitData?.revealedAmount;
-  const isUser = userAddress && bidder.toLowerCase() === userAddress.toLowerCase();
-
-  return (
-    <tr className={isUser ? "bg-primary/10" : ""}>
-      <td>{index + 1}</td>
-      <td>
-        <div className="flex items-center gap-2">
-          <Address address={bidder} size="xs" />
-          {isUser && <span className="badge badge-primary badge-xs">You</span>}
-        </div>
-      </td>
-      <td>
-        {revealed ? (
-          <span className="font-mono text-sm font-bold text-success">{formatEther(revealedAmount ?? 0n)} ETH</span>
-        ) : (
-          <span className="badge badge-ghost badge-sm">Hidden</span>
-        )}
-      </td>
-    </tr>
   );
 };
 

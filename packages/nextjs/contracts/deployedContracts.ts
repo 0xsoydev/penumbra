@@ -425,13 +425,18 @@ const deployedContracts = {
       deployedOnBlock: 38826334,
     },
     PenumbraAuction: {
-      address: "0xdfa35b4e287a91468e0308f8475adf11e5e59a5e",
+      address: "0x3296eaf67350cfc643dfbf70139fe46b5589dc4c",
       abi: [
         {
           type: "constructor",
           inputs: [
             {
               name: "initialOwner",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_verifier",
               type: "address",
               internalType: "address",
             },
@@ -475,27 +480,17 @@ const deployedContracts = {
               internalType: "uint256",
             },
             {
-              name: "revealDeadline",
+              name: "settleDeadline",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "winner",
-              type: "address",
-              internalType: "address",
+              name: "winningNullifier",
+              type: "bytes32",
+              internalType: "bytes32",
             },
             {
-              name: "winningBid",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "winnerStealthAddress",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "settled",
+              name: "claimed",
               type: "bool",
               internalType: "bool",
             },
@@ -522,12 +517,40 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "claimWithProof",
+          inputs: [
+            {
+              name: "auctionId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "stealthAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "commitBid",
           inputs: [
             {
               name: "auctionId",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "nullifier",
+              type: "bytes32",
+              internalType: "bytes32",
             },
             {
               name: "commitHash",
@@ -540,6 +563,25 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "commitCount",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "commits",
           inputs: [
             {
@@ -549,8 +591,8 @@ const deployedContracts = {
             },
             {
               name: "",
-              type: "address",
-              internalType: "address",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [
@@ -560,14 +602,9 @@ const deployedContracts = {
               internalType: "bytes32",
             },
             {
-              name: "revealed",
+              name: "exists",
               type: "bool",
               internalType: "bool",
-            },
-            {
-              name: "revealedAmount",
-              type: "uint256",
-              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -597,7 +634,7 @@ const deployedContracts = {
               internalType: "uint256",
             },
             {
-              name: "revealDuration",
+              name: "settleDuration",
               type: "uint256",
               internalType: "uint256",
             },
@@ -609,6 +646,24 @@ const deployedContracts = {
               internalType: "uint256",
             },
           ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "declareWinner",
+          inputs: [
+            {
+              name: "auctionId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "winningNullifier",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
           stateMutability: "nonpayable",
         },
         {
@@ -653,27 +708,17 @@ const deployedContracts = {
                   internalType: "uint256",
                 },
                 {
-                  name: "revealDeadline",
+                  name: "settleDeadline",
                   type: "uint256",
                   internalType: "uint256",
                 },
                 {
-                  name: "winner",
-                  type: "address",
-                  internalType: "address",
+                  name: "winningNullifier",
+                  type: "bytes32",
+                  internalType: "bytes32",
                 },
                 {
-                  name: "winningBid",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "winnerStealthAddress",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "settled",
+                  name: "claimed",
                   type: "bool",
                   internalType: "bool",
                 },
@@ -683,25 +728,6 @@ const deployedContracts = {
                   internalType: "bool",
                 },
               ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getAuctionBidders",
-          inputs: [
-            {
-              name: "auctionId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address[]",
-              internalType: "address[]",
             },
           ],
           stateMutability: "view",
@@ -735,9 +761,9 @@ const deployedContracts = {
               internalType: "uint256",
             },
             {
-              name: "bidder",
-              type: "address",
-              internalType: "address",
+              name: "nullifier",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [
@@ -752,16 +778,30 @@ const deployedContracts = {
                   internalType: "bytes32",
                 },
                 {
-                  name: "revealed",
+                  name: "exists",
                   type: "bool",
                   internalType: "bool",
                 },
-                {
-                  name: "revealedAmount",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
               ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getCommitCount",
+          inputs: [
+            {
+              name: "auctionId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -801,47 +841,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "revealBid",
-          inputs: [
-            {
-              name: "auctionId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "bidAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "salt",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "settle",
-          inputs: [
-            {
-              name: "auctionId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "winnerStealthAddress",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "transferOwnership",
           inputs: [
             {
@@ -854,6 +853,38 @@ const deployedContracts = {
           stateMutability: "nonpayable",
         },
         {
+          type: "function",
+          name: "usedNullifiers",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IVerifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
           type: "event",
           name: "AuctionCancelled",
           inputs: [
@@ -862,6 +893,25 @@ const deployedContracts = {
               type: "uint256",
               indexed: true,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "AuctionClaimed",
+          inputs: [
+            {
+              name: "auctionId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "stealthAddress",
+              type: "address",
+              indexed: false,
+              internalType: "address",
             },
           ],
           anonymous: false,
@@ -899,37 +949,6 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "AuctionSettled",
-          inputs: [
-            {
-              name: "auctionId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "winner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "winningBid",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "stealthAddress",
-              type: "address",
-              indexed: false,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "BidCommitted",
           inputs: [
             {
@@ -939,41 +958,10 @@ const deployedContracts = {
               internalType: "uint256",
             },
             {
-              name: "bidder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "commitHash",
+              name: "nullifier",
               type: "bytes32",
-              indexed: false,
+              indexed: true,
               internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "BidRevealed",
-          inputs: [
-            {
-              name: "auctionId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "bidder",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
             },
           ],
           anonymous: false,
@@ -993,6 +981,25 @@ const deployedContracts = {
               type: "address",
               indexed: true,
               internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WinnerDeclared",
+          inputs: [
+            {
+              name: "auctionId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "winningNullifier",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -1037,7 +1044,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 38826334,
+      deployedOnBlock: 38852257,
     },
   },
 } as const;

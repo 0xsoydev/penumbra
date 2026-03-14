@@ -1,9 +1,11 @@
 {
     "network": "baseSepolia",
     "chainId": 84532,
-    "PenumbraToken": "0x5dfbd7e43d207f3c1c67e5d81a28593bec0981e7",
-    "PenumbraAuction": "0xdfa35b4e287a91468e0308f8475adf11e5e59a5e",
-    "deployedAt": "2026-03-13T16:55:56.000Z",
-    "deployerAddress": "0xf0b7386e975c4b9e5820d568db7b40e3cfca0cba"
+    "PenumbraToken": "0x5dfBd7e43D207F3C1c67e5d81a28593bEC0981E7",
+    "PenumbraAuction": "0x3296eAF67350cFC643DfBF70139fe46b5589dc4c",
+    "PenumbraAuction_old": "0xDFa35B4e287a91468e0308F8475ADf11E5e59A5e",
+    "HonkVerifier": "0xe58D9Df25D1AD8Ab3391A3730f0690aAa188d483",
+    "deployedAt": "2026-03-14T00:00:00.000Z",
+    "deployerAddress": "0xf0B7386E975C4b9E5820D568DB7B40e3CfCA0Cba",
+    "notes": "ZK-enabled deployment with nullifier-based sealed bids and on-chain proof verification"
   }
-  

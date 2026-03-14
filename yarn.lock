@@ -4022,8 +4022,8 @@ __metadata:
     eslint-config-next: ~15.2.3
     eslint-config-prettier: ~10.1.1
     eslint-plugin-prettier: ~5.2.4
-    framer-motion: ^12.0.0
     ethers: ^5.7.2
+    framer-motion: ^12.0.0
     kubo-rpc-client: ~5.0.2
     next: ~15.2.8
     next-nprogress-bar: ~2.3.13
@@ -13552,6 +13552,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"monocle-ts@npm:^2.3.13":
+  version: 2.3.13
+  resolution: "monocle-ts@npm:2.3.13"
+  peerDependencies:
+    fp-ts: ^2.5.0
+  checksum: dddfa5706fe1fdb068606f5ac5215a00e723d155407de491bb53591264e281ec0ea1735759db93686d9daf676b105660bf2c656ebcd51626a4bfbb8de9accb3c
+  languageName: node
+  linkType: hard
+
 "motion-dom@npm:^12.36.0":
   version: 12.36.0
   resolution: "motion-dom@npm:12.36.0"
@@ -13565,15 +13574,6 @@ __metadata:
   version: 12.36.0
   resolution: "motion-utils@npm:12.36.0"
   checksum: 61b61425101402ab879b7b4cdf9c940009937e18005ce7a52a3b679bde9c73594802188bc14d2b9d2885a6f70015a2cf9173f3f1c8da2a63bf4edaa503a143f1
-  languageName: node
-  linkType: hard
-
-"monocle-ts@npm:^2.3.13":
-  version: 2.3.13
-  resolution: "monocle-ts@npm:2.3.13"
-  peerDependencies:
-    fp-ts: ^2.5.0
-  checksum: dddfa5706fe1fdb068606f5ac5215a00e723d155407de491bb53591264e281ec0ea1735759db93686d9daf676b105660bf2c656ebcd51626a4bfbb8de9accb3c
   languageName: node
   linkType: hard
 

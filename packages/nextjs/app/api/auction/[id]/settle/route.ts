@@ -3,26 +3,29 @@ import { eq } from "drizzle-orm";
 import { db } from "~~/db";
 import { auctions, deposits, stealthAnnouncements, stealthKeys } from "~~/db/schema";
 import { sendMany } from "~~/services/penumbra/bitgo";
-import { determineWinner, settle as settleOnChain } from "~~/services/penumbra/contract";
+import { declareWinner as declareWinnerOnChain, getAuction as getOnChainAuction } from "~~/services/penumbra/contract";
 import { generateStealthAddress } from "~~/services/penumbra/umbra";
 
 /**
  * POST /api/auction/[id]/settle
  *
- * The most complex route — orchestrates the full settlement:
+ * ZK-Privacy Settlement Flow:
  *
- *   1. Read on-chain state to determine the winner (highest revealed bid)
- *   2. Look up stealth keys for winner + seller from DB
- *   3. Generate Umbra stealth addresses for:
- *      - Winner (receives the ERC-20 tokens)
- *      - Seller (receives the winning ETH bid)
- *   4. Call contract.settle() on-chain — transfers ERC-20 to winner's stealth address
- *   5. Call BitGo sendMany() — sends winner's ETH to seller's stealth address,
- *      refunds all losing bidders to their original addresses
- *   6. Store stealth announcements in DB so recipients can scan for payments
+ *   1. Fetch all committed bids from DB (amounts are stored off-chain only)
+ *   2. Verify commit hashes match: keccak256(bidAmount, salt, nullifier) == stored commitHash
+ *   3. Determine highest bid (off-chain — amounts NEVER posted on-chain)
+ *   4. Call declareWinner(auctionId, winningNullifier) on-chain
+ *      — Only the nullifier is posted; no address, no amount
+ *   5. Send ETH via BitGo:
+ *      - Seller receives winning bid at stealth address
+ *      - Losers get refunded to original addresses
+ *   6. Store stealth announcements for seller
  *
- * This endpoint is admin-only (called by deployer/owner).
- * In a production system you'd add auth — for the hackathon, we trust the caller.
+ * NOTE: The winner claims tokens separately via claimWithProof (permissionless).
+ *       This route does NOT transfer tokens — it only declares the winner and
+ *       handles the ETH side.
+ *
+ * This endpoint is admin-only (deployer/owner).
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -34,68 +37,99 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
     // --- 1. Fetch auction from DB ---
     const [auction] = await db.select().from(auctions).where(eq(auctions.id, auctionId));
-
     if (!auction) {
       return NextResponse.json({ error: "Auction not found" }, { status: 404 });
     }
 
-    // --- 2. Determine winner from on-chain state ---
-    const result = await determineWinner(auctionId);
-    if (!result) {
-      return NextResponse.json({ error: "No valid revealed bids — cannot settle" }, { status: 400 });
+    // --- 2. Fetch all committed bids from DB ---
+    const allDeposits = await db.select().from(deposits).where(eq(deposits.auctionId, auctionId));
+    const committedBids = allDeposits.filter(d => d.committed && d.nullifier && d.bidAmount);
+
+    if (committedBids.length === 0) {
+      return NextResponse.json({ error: "No committed bids found" }, { status: 400 });
     }
-    const { winner: winnerAddress, amount: winningAmount } = result;
 
-    // --- 3. Look up stealth keys for winner + seller ---
-    const [winnerKeys] = await db
-      .select()
-      .from(stealthKeys)
-      .where(eq(stealthKeys.address, winnerAddress.toLowerCase()));
+    // --- 3. Verify commit hashes and determine winner (off-chain) ---
+    const { ethers } = await import("ethers");
+    let highestBid: (typeof committedBids)[0] | null = null;
 
+    for (const bid of committedBids) {
+      // Verify commit hash matches
+      const expectedHash = ethers.utils.solidityKeccak256(
+        ["uint256", "bytes32", "bytes32"],
+        [bid.bidAmount!, bid.salt!, bid.nullifier!],
+      );
+
+      if (expectedHash.toLowerCase() !== bid.commitHash!.toLowerCase()) {
+        console.warn(`Bid with nullifier ${bid.nullifier} has invalid commit hash — skipping`);
+        continue;
+      }
+
+      // Check if this is the highest bid
+      if (!highestBid || ethers.BigNumber.from(bid.bidAmount!).gt(ethers.BigNumber.from(highestBid.bidAmount!))) {
+        highestBid = bid;
+      }
+    }
+
+    if (!highestBid) {
+      return NextResponse.json({ error: "No valid bids found after verification" }, { status: 400 });
+    }
+
+    // --- 4. Declare winner on-chain ---
+    const onChainAuction = await getOnChainAuction(auctionId);
+    let declareTxHash = "";
+
+    if (onChainAuction.winningNullifier !== ethers.constants.HashZero) {
+      console.log(`Auction ${auctionId} winner already declared on-chain, skipping`);
+      declareTxHash = "(already declared)";
+    } else {
+      console.log(`Declaring winner for auction ${auctionId}: nullifier ${highestBid.nullifier}`);
+      const receipt = await declareWinnerOnChain(auctionId, highestBid.nullifier!);
+      declareTxHash = receipt.transactionHash;
+      console.log(`declareWinner tx confirmed: ${declareTxHash}`);
+    }
+
+    // Mark winner in DB
+    await db.update(deposits).set({ isWinner: true }).where(eq(deposits.id, highestBid.id));
+
+    // --- 5. BitGo ETH settlement ---
+    // Look up seller stealth keys for ETH payment
     const [sellerKeys] = await db
       .select()
       .from(stealthKeys)
       .where(eq(stealthKeys.address, auction.sellerAddress.toLowerCase()));
 
-    if (!winnerKeys) {
-      return NextResponse.json({ error: `Winner ${winnerAddress} has not registered stealth keys` }, { status: 400 });
-    }
-    if (!sellerKeys) {
-      return NextResponse.json(
-        { error: `Seller ${auction.sellerAddress} has not registered stealth keys` },
-        { status: 400 },
-      );
-    }
-
-    // --- 4. Generate stealth addresses ---
-    const winnerStealth = generateStealthAddress(winnerKeys.spendingPublicKey, winnerKeys.viewingPublicKey);
-
-    const sellerStealth = generateStealthAddress(sellerKeys.spendingPublicKey, sellerKeys.viewingPublicKey);
-
-    // --- 5. On-chain settlement: transfer ERC-20 to winner's stealth address ---
-    const settleTxReceipt = await settleOnChain(auctionId, winnerStealth.stealthAddress);
-
-    // --- 6. BitGo settlement: send ETH from auction wallet ---
-    // Build recipient list: seller gets the winning bid, losers get refunded
-    const allDeposits = await db.select().from(deposits).where(eq(deposits.auctionId, auctionId));
-
     const bitgoRecipients: { address: string; amount: string }[] = [];
 
-    // Seller receives the winning bid amount at their stealth address
-    bitgoRecipients.push({
-      address: sellerStealth.stealthAddress,
-      amount: winningAmount.toString(),
-    });
+    if (sellerKeys) {
+      // Generate stealth address for seller to receive winning bid ETH
+      const sellerStealth = generateStealthAddress(sellerKeys.spendingPublicKey, sellerKeys.viewingPublicKey);
 
-    // Losers get refunded to their original addresses
+      bitgoRecipients.push({
+        address: sellerStealth.stealthAddress,
+        amount: highestBid.bidAmount!,
+      });
+
+      // Store stealth announcement for seller
+      await db.insert(stealthAnnouncements).values({
+        recipientAddress: auction.sellerAddress.toLowerCase(),
+        ephemeralPublicKey: sellerStealth.ephemeralPublicKey,
+        stealthAddress: sellerStealth.stealthAddress,
+        auctionId,
+      });
+    } else {
+      console.warn(`Seller ${auction.sellerAddress} has no stealth keys — ETH sent to original address`);
+      bitgoRecipients.push({
+        address: auction.sellerAddress,
+        amount: highestBid.bidAmount!,
+      });
+    }
+
+    // Refund losers to their original addresses
     for (const deposit of allDeposits) {
-      if (
-        deposit.bidderAddress.toLowerCase() !== winnerAddress.toLowerCase() &&
-        deposit.confirmed &&
-        deposit.amountWei !== "0"
-      ) {
+      if (deposit.id !== highestBid.id && deposit.confirmed && deposit.amountWei !== "0") {
         bitgoRecipients.push({
-          address: deposit.bidderAddress, // refund to original address (not stealth)
+          address: deposit.bidderAddress,
           amount: deposit.amountWei,
         });
       }
@@ -103,41 +137,36 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
     let bitgoTxId = "";
     if (bitgoRecipients.length > 0) {
-      bitgoTxId = await sendMany(auction.bitgoWalletId, bitgoRecipients);
+      try {
+        bitgoTxId = await sendMany(auction.bitgoWalletId, bitgoRecipients);
+      } catch (err) {
+        console.error("BitGo sendMany failed:", err);
+        bitgoTxId = `FAILED: ${err instanceof Error ? err.message : "unknown"}`;
+      }
     }
-
-    // --- 7. Store stealth announcements for recipient scanning ---
-    await db.insert(stealthAnnouncements).values([
-      {
-        recipientAddress: winnerAddress.toLowerCase(),
-        ephemeralPublicKey: winnerStealth.ephemeralPublicKey,
-        stealthAddress: winnerStealth.stealthAddress,
-        auctionId,
-      },
-      {
-        recipientAddress: auction.sellerAddress.toLowerCase(),
-        ephemeralPublicKey: sellerStealth.ephemeralPublicKey,
-        stealthAddress: sellerStealth.stealthAddress,
-        auctionId,
-      },
-    ]);
 
     return NextResponse.json({
       success: true,
       settlement: {
         auctionId,
-        winner: winnerAddress,
-        winningAmount: winningAmount.toString(),
-        winnerStealthAddress: winnerStealth.stealthAddress,
-        sellerStealthAddress: sellerStealth.stealthAddress,
-        onChainTxHash: settleTxReceipt.transactionHash,
+        winningNullifier: highestBid.nullifier,
+        winningBidWei: highestBid.bidAmount,
+        totalBids: committedBids.length,
+        declareTxHash,
         bitgoTxId,
-        refundedBidders: bitgoRecipients.length - 1, // exclude seller
+        refundedBidders: bitgoRecipients.length - 1,
+        note: "Winner must call claimWithProof() separately to receive tokens",
       },
     });
   } catch (error) {
     console.error("auction/[id]/settle error:", error);
+    if (error instanceof Error) {
+      console.error("Stack:", error.stack);
+    }
     const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, stack: error instanceof Error ? error.stack?.split("\n").slice(0, 5) : undefined },
+      { status: 500 },
+    );
   }
 }

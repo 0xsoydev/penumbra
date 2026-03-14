@@ -1,0 +1,6 @@
+[package]
+name = "nullifier_claim"
+type = "bin"
+authors = [""]
+
+[dependencies]

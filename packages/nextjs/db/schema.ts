@@ -5,7 +5,8 @@ export const auctions = pgTable("auctions", {
   sellerAddress: text("seller_address").notNull(),
   bitgoWalletId: text("bitgo_wallet_id").notNull(),
   bitgoWalletAddress: text("bitgo_wallet_address").notNull(),
-  ensName: text("ens_name"),
+  ensName: text("ens_name"), // pseudonym flow only — NEVER store the reverse-resolved ENS name here
+  ensVerified: boolean("ens_verified").notNull().default(false),
   docCid: text("doc_cid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -15,10 +16,19 @@ export const deposits = pgTable("deposits", {
   auctionId: bigint("auction_id", { mode: "number" })
     .notNull()
     .references(() => auctions.id),
-  bidderAddress: text("bidder_address").notNull(),
+  bidderAddress: text("bidder_address").notNull(), // for BitGo refund routing only — never on-chain
   bitgoDepositAddress: text("bitgo_deposit_address").notNull(),
   amountWei: text("amount_wei").notNull().default("0"),
   confirmed: boolean("confirmed").notNull().default(false),
+
+  // ZK privacy fields
+  nullifier: text("nullifier"), // pedersen_hash(secret) — the on-chain pseudonym
+  secret: text("secret"), // the secret value (hex) — only known to bidder + backend
+  salt: text("salt"), // random salt for commit hash
+  commitHash: text("commit_hash"), // keccak256(abi.encodePacked(bidAmount, salt, nullifier))
+  bidAmount: text("bid_amount"), // bid amount in wei (kept off-chain, never on-chain)
+  committed: boolean("committed").notNull().default(false), // true once relayed to contract
+  isWinner: boolean("is_winner").notNull().default(false), // set by backend after off-chain reveal
 });
 
 export const stealthKeys = pgTable("stealth_keys", {

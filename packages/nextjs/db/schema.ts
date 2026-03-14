@@ -1,0 +1,36 @@
+import { bigint, boolean, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+
+export const auctions = pgTable("auctions", {
+  id: bigint("id", { mode: "number" }).primaryKey(), // matches on-chain auctionId
+  sellerAddress: text("seller_address").notNull(),
+  bitgoWalletId: text("bitgo_wallet_id").notNull(),
+  bitgoWalletAddress: text("bitgo_wallet_address").notNull(),
+  ensName: text("ens_name"),
+  docCid: text("doc_cid"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const deposits = pgTable("deposits", {
+  id: serial("id").primaryKey(),
+  auctionId: bigint("auction_id", { mode: "number" })
+    .notNull()
+    .references(() => auctions.id),
+  bidderAddress: text("bidder_address").notNull(),
+  bitgoDepositAddress: text("bitgo_deposit_address").notNull(),
+  amountWei: text("amount_wei").notNull().default("0"),
+  confirmed: boolean("confirmed").notNull().default(false),
+});
+
+export const stealthKeys = pgTable("stealth_keys", {
+  address: text("address").primaryKey(),
+  spendingPublicKey: text("spending_public_key").notNull(),
+  viewingPublicKey: text("viewing_public_key").notNull(),
+});
+
+export const stealthAnnouncements = pgTable("stealth_announcements", {
+  id: serial("id").primaryKey(),
+  recipientAddress: text("recipient_address").notNull(),
+  ephemeralPublicKey: text("ephemeral_public_key").notNull(),
+  stealthAddress: text("stealth_address").notNull(),
+  auctionId: bigint("auction_id", { mode: "number" }).notNull(),
+});

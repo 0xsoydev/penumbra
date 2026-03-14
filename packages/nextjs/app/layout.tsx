@@ -8,8 +8,8 @@ import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 
 export const metadata = getMetadata({
-  title: 'Scaffold-ETH 2 App',
-  description: 'Built with 🏗 Scaffold-ETH 2'
+  title: 'Penumbra — Sealed-Bid OTC Auctions',
+  description: 'Privacy-preserving sealed-bid auctions for illiquid tokens. Commit-reveal on-chain, stealth address settlement, ENS pseudonymity.'
 });
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {

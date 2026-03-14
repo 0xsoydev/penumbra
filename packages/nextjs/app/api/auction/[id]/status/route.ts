@@ -52,7 +52,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       auction: {
         id: auction.id,
         sellerAddress: auction.sellerAddress,
-        ensName: auction.ensName,
+        ensVerified: auction.ensVerified,
         docCid: auction.docCid,
         createdAt: auction.createdAt,
       },

@@ -5,7 +5,8 @@ export const auctions = pgTable("auctions", {
   sellerAddress: text("seller_address").notNull(),
   bitgoWalletId: text("bitgo_wallet_id").notNull(),
   bitgoWalletAddress: text("bitgo_wallet_address").notNull(),
-  ensName: text("ens_name"),
+  ensName: text("ens_name"), // pseudonym flow only — NEVER store the reverse-resolved ENS name here
+  ensVerified: boolean("ens_verified").notNull().default(false),
   docCid: text("doc_cid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

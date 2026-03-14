@@ -2,7 +2,14 @@ import { Barretenberg, UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
 import { ethers } from "ethers";
 import { readFileSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
+
+// Set CRS cache path BEFORE any bb.js imports — defaults to ~/.bb-crs which fails on Vercel
+// Must be set at module load time, before Barretenberg class is instantiated
+if (!process.env.CRS_PATH) {
+  process.env.CRS_PATH = "/tmp/.bb-crs";
+}
 
 // ----------------------------------------------------------------
 // ZK Proof Service — server-side only
@@ -45,7 +52,9 @@ function getCircuit() {
 
 async function getBb() {
   if (!bbInstance) {
-    bbInstance = await Barretenberg.new();
+    // Use /tmp for CRS cache — required for Vercel serverless (home dir is read-only)
+    const crsPath = process.env.CRS_PATH || join(tmpdir(), ".bb-crs");
+    bbInstance = await Barretenberg.new({ crsPath });
   }
   return bbInstance;
 }

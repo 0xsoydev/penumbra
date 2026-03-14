@@ -318,7 +318,15 @@ const Profile: NextPage = () => {
                                 #{bid.auctionId}
                               </Link>
                             </td>
-                            <td className="font-mono text-xs">{BigInt(bid.bidAmount).toString().slice(0, 12)}...</td>
+                            <td className="font-mono text-xs">
+                              {(() => {
+                                try {
+                                  return BigInt(bid.bidAmount).toString().slice(0, 12) + "...";
+                                } catch {
+                                  return bid.bidAmount;
+                                }
+                              })()}
+                            </td>
                             <td>
                               {bid.revealed ? (
                                 <span className="bg-[#0066FF] text-white px-2 py-1 text-xs border border-black shadow-[1px_1px_0px_#000]">

@@ -139,7 +139,7 @@ const AuctionDetail: NextPage = () => {
       // Persist the secret/nullifier/salt so we can claim later
       saveBid({
         auctionId,
-        bidAmount,
+        bidAmount: parseEther(bidAmount).toString(),
         salt: data.salt,
         secret: data.secret,
         nullifier: data.nullifier,

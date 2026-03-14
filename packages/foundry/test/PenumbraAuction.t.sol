@@ -1,29 +1,36 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity >=0.8.21;
 
 import "forge-std/Test.sol";
 import "../contracts/PenumbraToken.sol";
 import "../contracts/PenumbraAuction.sol";
+import "../contracts/NullifierVerifier.sol";
 
 contract PenumbraAuctionTest is Test {
     PenumbraToken token;
     PenumbraAuction auction;
+    HonkVerifier verifier;
 
     address owner = address(this);
     address seller = makeAddr("seller");
-    address bidder1 = makeAddr("bidder1");
-    address bidder2 = makeAddr("bidder2");
-    address bidder3 = makeAddr("bidder3");
+    address relayer = address(this); // backend relays commits (is also owner)
+    address burnerWallet = makeAddr("burner"); // winner claims from burner
     address stealthAddr = makeAddr("stealth");
 
     uint256 constant TOKEN_AMOUNT = 1000 ether;
     uint256 constant MINIMUM_BID = 0.1 ether;
     uint256 constant COMMIT_DURATION = 1 hours;
-    uint256 constant REVEAL_DURATION = 1 hours;
+    uint256 constant SETTLE_DURATION = 1 hours;
+
+    // Test nullifiers (would be pedersen hashes in production)
+    bytes32 nullifier1 = keccak256("secret1");
+    bytes32 nullifier2 = keccak256("secret2");
+    bytes32 nullifier3 = keccak256("secret3");
 
     function setUp() public {
         token = new PenumbraToken(owner);
-        auction = new PenumbraAuction(owner);
+        verifier = new HonkVerifier();
+        auction = new PenumbraAuction(owner, address(verifier));
 
         token.transfer(seller, TOKEN_AMOUNT);
     }
@@ -32,12 +39,12 @@ contract PenumbraAuctionTest is Test {
         vm.startPrank(seller);
         token.approve(address(auction), TOKEN_AMOUNT);
         auctionId =
-            auction.createAuction(address(token), TOKEN_AMOUNT, MINIMUM_BID, COMMIT_DURATION, REVEAL_DURATION);
+            auction.createAuction(address(token), TOKEN_AMOUNT, MINIMUM_BID, COMMIT_DURATION, SETTLE_DURATION);
         vm.stopPrank();
     }
 
-    function _commitHash(uint256 bidAmount, bytes32 salt) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(bidAmount, salt));
+    function _commitHash(uint256 bidAmount, bytes32 salt, bytes32 nullifier) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(bidAmount, salt, nullifier));
     }
 
     // =========================================================================
@@ -54,7 +61,7 @@ contract PenumbraAuctionTest is Test {
         emit PenumbraAuction.AuctionCreated(0, seller, address(token), TOKEN_AMOUNT);
 
         uint256 auctionId =
-            auction.createAuction(address(token), TOKEN_AMOUNT, MINIMUM_BID, COMMIT_DURATION, REVEAL_DURATION);
+            auction.createAuction(address(token), TOKEN_AMOUNT, MINIMUM_BID, COMMIT_DURATION, SETTLE_DURATION);
         vm.stopPrank();
 
         assertEq(auctionId, 0);
@@ -66,10 +73,9 @@ contract PenumbraAuctionTest is Test {
         assertEq(a.tokenAmount, TOKEN_AMOUNT);
         assertEq(a.minimumBid, MINIMUM_BID);
         assertEq(a.commitDeadline, block.timestamp + COMMIT_DURATION);
-        assertEq(a.revealDeadline, block.timestamp + COMMIT_DURATION + REVEAL_DURATION);
-        assertEq(a.winner, address(0));
-        assertEq(a.winningBid, 0);
-        assertFalse(a.settled);
+        assertEq(a.settleDeadline, block.timestamp + COMMIT_DURATION + SETTLE_DURATION);
+        assertEq(a.winningNullifier, bytes32(0));
+        assertFalse(a.claimed);
         assertFalse(a.cancelled);
 
         assertEq(token.balanceOf(seller), sellerBalBefore - TOKEN_AMOUNT);
@@ -85,12 +91,12 @@ contract PenumbraAuctionTest is Test {
         token.approve(address(auction), TOKEN_AMOUNT);
 
         vm.expectRevert("Token amount must be > 0");
-        auction.createAuction(address(token), 0, MINIMUM_BID, COMMIT_DURATION, REVEAL_DURATION);
+        auction.createAuction(address(token), 0, MINIMUM_BID, COMMIT_DURATION, SETTLE_DURATION);
         vm.stopPrank();
     }
 
     // =========================================================================
-    // Test 3: commitBid success
+    // Test 3: commitBid with nullifier - backend relays
     // =========================================================================
 
     function test_CommitBid_Success() public {
@@ -98,22 +104,19 @@ contract PenumbraAuctionTest is Test {
 
         uint256 bidAmount = 1 ether;
         bytes32 salt = bytes32(uint256(123));
-        bytes32 hash = _commitHash(bidAmount, salt);
+        bytes32 hash = _commitHash(bidAmount, salt, nullifier1);
 
         vm.expectEmit(true, true, false, true);
-        emit PenumbraAuction.BidCommitted(auctionId, bidder1, hash);
+        emit PenumbraAuction.BidCommitted(auctionId, nullifier1);
 
-        vm.prank(bidder1);
-        auction.commitBid(auctionId, hash);
+        // Backend (owner/relayer) submits the bid — bidder's address never touches contract
+        auction.commitBid(auctionId, nullifier1, hash);
 
-        PenumbraAuction.Commit memory c = auction.getCommit(auctionId, bidder1);
+        PenumbraAuction.Commit memory c = auction.getCommit(auctionId, nullifier1);
         assertEq(c.commitHash, hash);
-        assertFalse(c.revealed);
-        assertEq(c.revealedAmount, 0);
+        assertTrue(c.exists);
 
-        address[] memory bidders = auction.getAuctionBidders(auctionId);
-        assertEq(bidders.length, 1);
-        assertEq(bidders[0], bidder1);
+        assertEq(auction.commitCount(auctionId), 1);
     }
 
     // =========================================================================
@@ -125,217 +128,117 @@ contract PenumbraAuctionTest is Test {
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
 
-        bytes32 hash = _commitHash(1 ether, bytes32(uint256(1)));
-        vm.prank(bidder1);
+        bytes32 hash = _commitHash(1 ether, bytes32(uint256(1)), nullifier1);
         vm.expectRevert("Commit phase ended");
-        auction.commitBid(auctionId, hash);
+        auction.commitBid(auctionId, nullifier1, hash);
     }
 
     // =========================================================================
-    // Test 5: commitBid reverts on duplicate
+    // Test 5: commitBid reverts on duplicate nullifier
     // =========================================================================
 
-    function test_CommitBid_RevertsDuplicate() public {
+    function test_CommitBid_RevertsDuplicateNullifier() public {
         uint256 auctionId = _createAuction();
 
-        bytes32 hash = _commitHash(1 ether, bytes32(uint256(1)));
+        bytes32 hash = _commitHash(1 ether, bytes32(uint256(1)), nullifier1);
+        auction.commitBid(auctionId, nullifier1, hash);
 
-        vm.prank(bidder1);
-        auction.commitBid(auctionId, hash);
-
-        vm.prank(bidder1);
-        vm.expectRevert("Already committed");
-        auction.commitBid(auctionId, hash);
+        vm.expectRevert("Nullifier already used in this auction");
+        auction.commitBid(auctionId, nullifier1, hash);
     }
 
     // =========================================================================
-    // Test 6: revealBid success
+    // Test 6: commitBid rejects globally reused nullifier
     // =========================================================================
 
-    function test_RevealBid_Success() public {
+    function test_CommitBid_RevertsGloballyUsedNullifier() public {
+        // Create first auction and use nullifier1
+        uint256 auctionId1 = _createAuction();
+        bytes32 hash = _commitHash(1 ether, bytes32(uint256(1)), nullifier1);
+        auction.commitBid(auctionId1, nullifier1, hash);
+
+        // Create second auction — give seller more tokens
+        token.transfer(seller, TOKEN_AMOUNT);
+        vm.startPrank(seller);
+        token.approve(address(auction), TOKEN_AMOUNT);
+        uint256 auctionId2 =
+            auction.createAuction(address(token), TOKEN_AMOUNT, MINIMUM_BID, COMMIT_DURATION, SETTLE_DURATION);
+        vm.stopPrank();
+
+        // Try to reuse same nullifier in different auction
+        vm.expectRevert("Nullifier already used globally");
+        auction.commitBid(auctionId2, nullifier1, hash);
+    }
+
+    // =========================================================================
+    // Test 7: declareWinner success
+    // =========================================================================
+
+    function test_DeclareWinner_Success() public {
         uint256 auctionId = _createAuction();
 
-        uint256 bidAmount = 1 ether;
-        bytes32 salt = bytes32(uint256(42));
-        bytes32 hash = _commitHash(bidAmount, salt);
+        // Submit two bids via nullifiers
+        auction.commitBid(auctionId, nullifier1, _commitHash(1 ether, bytes32(uint256(1)), nullifier1));
+        auction.commitBid(auctionId, nullifier2, _commitHash(3 ether, bytes32(uint256(2)), nullifier2));
 
-        vm.prank(bidder1);
-        auction.commitBid(auctionId, hash);
-
+        // Move past commit phase
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
 
+        // Backend determines winner off-chain and declares nullifier2 as winner
         vm.expectEmit(true, true, false, true);
-        emit PenumbraAuction.BidRevealed(auctionId, bidder1, bidAmount);
+        emit PenumbraAuction.WinnerDeclared(auctionId, nullifier2);
 
-        vm.prank(bidder1);
-        auction.revealBid(auctionId, bidAmount, salt);
-
-        PenumbraAuction.Commit memory c = auction.getCommit(auctionId, bidder1);
-        assertTrue(c.revealed);
-        assertEq(c.revealedAmount, bidAmount);
+        auction.declareWinner(auctionId, nullifier2);
 
         PenumbraAuction.Auction memory a = auction.getAuction(auctionId);
-        assertEq(a.winner, bidder1);
-        assertEq(a.winningBid, bidAmount);
+        assertEq(a.winningNullifier, nullifier2);
     }
 
     // =========================================================================
-    // Test 7: revealBid reverts with invalid hash
+    // Test 8: declareWinner reverts if not owner
     // =========================================================================
 
-    function test_RevealBid_RevertsInvalidHash() public {
+    function test_DeclareWinner_RevertsIfNotOwner() public {
         uint256 auctionId = _createAuction();
-
-        uint256 bidAmount = 1 ether;
-        bytes32 salt = bytes32(uint256(42));
-        bytes32 hash = _commitHash(bidAmount, salt);
-
-        vm.prank(bidder1);
-        auction.commitBid(auctionId, hash);
+        auction.commitBid(auctionId, nullifier1, _commitHash(1 ether, bytes32(uint256(1)), nullifier1));
 
         vm.warp(block.timestamp + COMMIT_DURATION + 1);
 
-        vm.prank(bidder1);
-        vm.expectRevert("Invalid reveal");
-        auction.revealBid(auctionId, 2 ether, salt);
-
-        vm.prank(bidder1);
-        vm.expectRevert("Invalid reveal");
-        auction.revealBid(auctionId, bidAmount, bytes32(uint256(999)));
-    }
-
-    // =========================================================================
-    // Test 8: revealBid reverts below minimum bid
-    // =========================================================================
-
-    function test_RevealBid_RevertsBelowMinimum() public {
-        uint256 auctionId = _createAuction();
-
-        uint256 bidAmount = MINIMUM_BID - 1;
-        bytes32 salt = bytes32(uint256(7));
-        bytes32 hash = _commitHash(bidAmount, salt);
-
-        vm.prank(bidder1);
-        auction.commitBid(auctionId, hash);
-
-        vm.warp(block.timestamp + COMMIT_DURATION + 1);
-
-        vm.prank(bidder1);
-        vm.expectRevert("Below minimum bid");
-        auction.revealBid(auctionId, bidAmount, salt);
-    }
-
-    // =========================================================================
-    // Test 9: multiple bidders — highest wins
-    // =========================================================================
-
-    function test_RevealBid_MultipleWinnerIsHighest() public {
-        uint256 auctionId = _createAuction();
-
-        uint256 bid1 = 1 ether;
-        uint256 bid2 = 3 ether;
-        uint256 bid3 = 2 ether;
-        bytes32 salt1 = bytes32(uint256(11));
-        bytes32 salt2 = bytes32(uint256(22));
-        bytes32 salt3 = bytes32(uint256(33));
-
-        vm.prank(bidder1);
-        auction.commitBid(auctionId, _commitHash(bid1, salt1));
-        vm.prank(bidder2);
-        auction.commitBid(auctionId, _commitHash(bid2, salt2));
-        vm.prank(bidder3);
-        auction.commitBid(auctionId, _commitHash(bid3, salt3));
-
-        vm.warp(block.timestamp + COMMIT_DURATION + 1);
-
-        vm.prank(bidder1);
-        auction.revealBid(auctionId, bid1, salt1);
-        vm.prank(bidder2);
-        auction.revealBid(auctionId, bid2, salt2);
-        vm.prank(bidder3);
-        auction.revealBid(auctionId, bid3, salt3);
-
-        PenumbraAuction.Auction memory a = auction.getAuction(auctionId);
-        assertEq(a.winner, bidder2, "bidder2 should win with highest bid");
-        assertEq(a.winningBid, bid2);
-
-        address[] memory bidders = auction.getAuctionBidders(auctionId);
-        assertEq(bidders.length, 3);
-    }
-
-    // =========================================================================
-    // Test 10: settle transfers tokens to stealth address
-    // =========================================================================
-
-    function test_Settle_TransfersTokensToStealth() public {
-        uint256 auctionId = _createAuction();
-
-        uint256 bidAmount = 1 ether;
-        bytes32 salt = bytes32(uint256(100));
-
-        vm.prank(bidder1);
-        auction.commitBid(auctionId, _commitHash(bidAmount, salt));
-
-        vm.warp(block.timestamp + COMMIT_DURATION + 1);
-
-        vm.prank(bidder1);
-        auction.revealBid(auctionId, bidAmount, salt);
-
-        vm.warp(block.timestamp + REVEAL_DURATION + 1);
-
-        vm.expectEmit(true, true, false, true);
-        emit PenumbraAuction.AuctionSettled(auctionId, bidder1, bidAmount, stealthAddr);
-
-        auction.settle(auctionId, stealthAddr);
-
-        assertEq(token.balanceOf(stealthAddr), TOKEN_AMOUNT);
-        assertEq(token.balanceOf(address(auction)), 0);
-
-        PenumbraAuction.Auction memory a = auction.getAuction(auctionId);
-        assertTrue(a.settled);
-        assertEq(a.winnerStealthAddress, stealthAddr);
-    }
-
-    // =========================================================================
-    // Test 11: settle reverts if no winner
-    // =========================================================================
-
-    function test_Settle_RevertsIfNoWinner() public {
-        uint256 auctionId = _createAuction();
-
-        vm.warp(block.timestamp + COMMIT_DURATION + REVEAL_DURATION + 1);
-
-        vm.expectRevert("No winner");
-        auction.settle(auctionId, stealthAddr);
-    }
-
-    // =========================================================================
-    // Test 12: settle reverts if not owner
-    // =========================================================================
-
-    function test_Settle_RevertsIfNotOwner() public {
-        uint256 auctionId = _createAuction();
-
-        uint256 bidAmount = 1 ether;
-        bytes32 salt = bytes32(uint256(50));
-
-        vm.prank(bidder1);
-        auction.commitBid(auctionId, _commitHash(bidAmount, salt));
-
-        vm.warp(block.timestamp + COMMIT_DURATION + 1);
-
-        vm.prank(bidder1);
-        auction.revealBid(auctionId, bidAmount, salt);
-
-        vm.warp(block.timestamp + REVEAL_DURATION + 1);
-
-        vm.prank(bidder1);
+        vm.prank(seller);
         vm.expectRevert();
-        auction.settle(auctionId, stealthAddr);
+        auction.declareWinner(auctionId, nullifier1);
     }
 
     // =========================================================================
-    // Test 13: cancelAuction refunds seller
+    // Test 9: declareWinner reverts if commit phase not ended
+    // =========================================================================
+
+    function test_DeclareWinner_RevertsIfCommitNotEnded() public {
+        uint256 auctionId = _createAuction();
+        auction.commitBid(auctionId, nullifier1, _commitHash(1 ether, bytes32(uint256(1)), nullifier1));
+
+        vm.expectRevert("Commit phase not ended");
+        auction.declareWinner(auctionId, nullifier1);
+    }
+
+    // =========================================================================
+    // Test 10: declareWinner reverts for unknown nullifier
+    // =========================================================================
+
+    function test_DeclareWinner_RevertsUnknownNullifier() public {
+        uint256 auctionId = _createAuction();
+        auction.commitBid(auctionId, nullifier1, _commitHash(1 ether, bytes32(uint256(1)), nullifier1));
+
+        vm.warp(block.timestamp + COMMIT_DURATION + 1);
+
+        // Try to declare a nullifier that was never committed
+        bytes32 fakeNullifier = keccak256("fake");
+        vm.expectRevert("Nullifier not found in auction");
+        auction.declareWinner(auctionId, fakeNullifier);
+    }
+
+    // =========================================================================
+    // Test 11: cancelAuction refunds seller
     // =========================================================================
 
     function test_CancelAuction_RefundsSeller() public {
@@ -353,5 +256,80 @@ contract PenumbraAuctionTest is Test {
         assertTrue(a.cancelled);
 
         assertEq(uint256(auction.getAuctionPhase(auctionId)), uint256(PenumbraAuction.AuctionPhase.CANCELLED));
+    }
+
+    // =========================================================================
+    // Test 12: cancelAuction reverts if already claimed
+    // =========================================================================
+
+    function test_CancelAuction_RevertsIfClaimed() public {
+        // We can't easily test full claim flow here (needs real ZK proof)
+        // but we can test the revert logic by checking cancelled/claimed flags
+        uint256 auctionId = _createAuction();
+
+        vm.prank(seller);
+        auction.cancelAuction(auctionId);
+
+        vm.prank(seller);
+        vm.expectRevert("Already cancelled");
+        auction.cancelAuction(auctionId);
+    }
+
+    // =========================================================================
+    // Test 13: getAuctionPhase returns correct phases
+    // =========================================================================
+
+    function test_GetAuctionPhase() public {
+        uint256 auctionId = _createAuction();
+
+        // During commit
+        assertEq(uint256(auction.getAuctionPhase(auctionId)), uint256(PenumbraAuction.AuctionPhase.COMMIT));
+
+        // After commit, during settle
+        vm.warp(block.timestamp + COMMIT_DURATION + 1);
+        assertEq(uint256(auction.getAuctionPhase(auctionId)), uint256(PenumbraAuction.AuctionPhase.SETTLE));
+
+        // After settle deadline
+        vm.warp(block.timestamp + SETTLE_DURATION + 1);
+        assertEq(uint256(auction.getAuctionPhase(auctionId)), uint256(PenumbraAuction.AuctionPhase.ENDED));
+    }
+
+    // =========================================================================
+    // Test 14: multiple commits tracked correctly
+    // =========================================================================
+
+    function test_MultipleCommits_CountTracked() public {
+        uint256 auctionId = _createAuction();
+
+        auction.commitBid(auctionId, nullifier1, _commitHash(1 ether, bytes32(uint256(1)), nullifier1));
+        auction.commitBid(auctionId, nullifier2, _commitHash(2 ether, bytes32(uint256(2)), nullifier2));
+        auction.commitBid(auctionId, nullifier3, _commitHash(3 ether, bytes32(uint256(3)), nullifier3));
+
+        assertEq(auction.commitCount(auctionId), 3);
+
+        // Each commit is retrievable by nullifier
+        assertTrue(auction.getCommit(auctionId, nullifier1).exists);
+        assertTrue(auction.getCommit(auctionId, nullifier2).exists);
+        assertTrue(auction.getCommit(auctionId, nullifier3).exists);
+    }
+
+    // =========================================================================
+    // Test 15: claimWithProof reverts without declared winner
+    // =========================================================================
+
+    function test_ClaimWithProof_RevertsNoWinner() public {
+        uint256 auctionId = _createAuction();
+
+        vm.prank(burnerWallet);
+        vm.expectRevert("No winner declared");
+        auction.claimWithProof(auctionId, hex"", stealthAddr);
+    }
+
+    // =========================================================================
+    // Test 16: verifier contract is set correctly
+    // =========================================================================
+
+    function test_VerifierAddress() public view {
+        assertEq(address(auction.verifier()), address(verifier));
     }
 }

@@ -3,6 +3,8 @@ src = 'contracts'
 out = 'out'
 libs = ['lib', 'node_modules']
 fs_permissions = [{ access = "read-write", path = "./"}]
+optimizer = true
+optimizer_runs = 1
 
 
 [rpc_endpoints]

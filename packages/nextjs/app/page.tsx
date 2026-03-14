@@ -1,447 +1,358 @@
 "use client";
 
-import { useState } from "react";
-import localFont from "next/font/local";
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import type { NextPage } from "next";
+import { useAccount } from "wagmi";
+import starImage from "~~/components/assets/star.png";
+import { AuctionCard } from "~~/components/penumbra/AuctionCard";
+import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { AuctionData, AuctionPhase } from "~~/types/auction";
 
-// Configure Winky Milky font
-const winkyMilky = localFont({
-  src: "./fonts/Winky Milky.ttf",
-  variable: "--font-winky",
-});
+type AuctionEntry = {
+  id: number;
+  auction: AuctionData;
+  phase: AuctionPhase;
+  bidderCount: number;
+};
 
-const NAV_ITEMS = ["HOME", "ABOUT", "WORK", "CREW", "CAREERS", "STORES", "CONTACT"] as const;
-type NavItem = (typeof NAV_ITEMS)[number];
+const Home: NextPage = () => {
+  const { address } = useAccount();
+  const [auctions, setAuctions] = useState<AuctionEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "active" | "ended" | "mine">("all");
 
-/* ── Interactive hover grid ── */
-// Increased grid density for better "square" look
-const COLS = 32;
-const ROWS = 20;
-const TOTAL = COLS * ROWS;
+  const { data: nextAuctionId } = useScaffoldReadContract({
+    contractName: "PenumbraAuction",
+    functionName: "nextAuctionId",
+  });
 
-const HoverGrid = () => {
-  const [hovered, setHovered] = useState<number | null>(null);
+  // Fetch all auctions when nextAuctionId is available
+  useEffect(() => {
+    if (nextAuctionId === undefined) return;
+
+    const totalAuctions = Number(nextAuctionId);
+    if (totalAuctions === 0) {
+      setAuctions([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    // We'll build auction entries as they load
+    const entries: AuctionEntry[] = [];
+    let loaded = 0;
+
+    // Use a sequential approach for reliability
+    const loadAuction = async (id: number) => {
+      try {
+        // We can't call hooks in a loop, so we'll set up the data structure
+        // and let individual AuctionListItem components handle their own data fetching
+        entries.push({
+          id,
+          auction: {} as AuctionData,
+          phase: AuctionPhase.COMMIT,
+          bidderCount: 0,
+        });
+      } finally {
+        loaded++;
+        if (loaded === totalAuctions) {
+          setAuctions([...entries]);
+          setLoading(false);
+        }
+      }
+    };
+
+    for (let i = 0; i < totalAuctions; i++) {
+      loadAuction(i);
+    }
+  }, [nextAuctionId]);
 
   return (
-    <div
-      className="absolute inset-0"
-      style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-        gridTemplateRows: `repeat(${ROWS}, 1fr)`,
-        zIndex: 1,
-      }}
-      onMouseLeave={() => setHovered(null)}
-    >
-      {Array.from({ length: TOTAL }).map((_, i) => (
+    <div className="flex flex-col flex-1 min-h-screen bg-white">
+      {/* Hero Wrapper */}
+      <div className="bg-[#0066FF] w-full p-4 md:p-8 lg:p-12 flex flex-col items-center min-h-screen">
+        {/* Inner Rounded Box */}
         <div
-          key={i}
-          // Only the exact hovered cell lights up
-          className="transition-colors duration-0 ease-linear"
+          className="w-full flex-1 bg-[#E5E5E5] rounded-[40px] md:rounded-[60px] relative overflow-hidden flex flex-col"
           style={{
-            border: "0.5px solid rgba(75,53,247,0.08)",
-            backgroundColor: hovered === i ? "rgba(75,53,247,0.4)" : "transparent",
+            backgroundImage: `
+                 linear-gradient(to right, #A0C4FF 1px, transparent 1px),
+                 linear-gradient(to bottom, #A0C4FF 1px, transparent 1px)
+               `,
+            backgroundSize: "100px 100px",
+            backgroundPosition: "0 0",
           }}
-          onMouseEnter={() => setHovered(i)}
-        />
-      ))}
+        >
+          {/* Floating Tiles Background */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+            <div
+              className="absolute bg-[#E5E5E5] border border-[#A0C4FF] shadow-[4px_4px_0px_rgba(0,0,0,0.15)]"
+              style={{ top: "100px", left: "20%", width: "100px", height: "100px" }}
+            />
+            <div
+              className="absolute bg-[#E5E5E5] border border-[#A0C4FF] shadow-[4px_4px_0px_rgba(0,0,0,0.15)]"
+              style={{ top: "400px", left: "10%", width: "100px", height: "100px" }}
+            />
+            <div
+              className="absolute bg-[#E5E5E5] border border-[#A0C4FF] shadow-[4px_4px_0px_rgba(0,0,0,0.15)]"
+              style={{ top: "200px", right: "15%", width: "100px", height: "100px" }}
+            />
+            <div
+              className="absolute bg-[#E5E5E5] border border-[#A0C4FF] shadow-[4px_4px_0px_rgba(0,0,0,0.15)]"
+              style={{ top: "300px", right: "25%", width: "100px", height: "100px" }}
+            />
+            <div
+              className="absolute bg-[#E5E5E5] border border-[#A0C4FF] shadow-[4px_4px_0px_rgba(0,0,0,0.15)]"
+              style={{ top: "300px", right: "15%", width: "100px", height: "100px" }}
+            />
+          </div>
+
+          {/* Navbar */}
+          <div className="w-full h-[100px] flex items-center justify-between px-6 md:px-12 lg:px-24 relative z-30">
+            <div className="font-black text-xl md:text-2xl tracking-widest text-black">PENUMBRA</div>
+            <div className="hidden md:flex gap-8 lg:gap-12 text-sm font-medium text-black">
+              <Link href="/" className="cursor-pointer hover:text-[#0066FF] transition-colors">
+                Home
+              </Link>
+              <Link href="/about" className="cursor-pointer hover:text-[#0066FF] transition-colors">
+                About Us
+              </Link>
+              <Link href="/profile" className="cursor-pointer hover:text-[#0066FF] transition-colors">
+                Dashboard
+              </Link>
+              <Link href="/auction/create" className="cursor-pointer hover:text-[#0066FF] transition-colors">
+                Create Auction
+              </Link>
+            </div>
+            <div className="flex items-center">
+              <ConnectButton.Custom>
+                {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
+                  const connected = mounted && account && chain;
+                  return (
+                    <div
+                      {...(!mounted && {
+                        "aria-hidden": true,
+                        style: { opacity: 0, pointerEvents: "none" as const, userSelect: "none" as const },
+                      })}
+                    >
+                      {!connected ? (
+                        <button
+                          onClick={openConnectModal}
+                          className="px-4 py-2 md:px-6 md:py-2.5 border border-black text-black font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#0066FF] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#0066FF] transition-all whitespace-nowrap"
+                        >
+                          Connect Wallet
+                        </button>
+                      ) : chain?.unsupported ? (
+                        <button
+                          onClick={openChainModal}
+                          className="px-4 py-2 md:px-6 md:py-2.5 border border-black text-red-500 font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#ff0000] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#ff0000] transition-all whitespace-nowrap"
+                        >
+                          Wrong Network
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={openChainModal}
+                            className="px-3 py-2 border border-black text-black font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#0066FF] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#0066FF] transition-all whitespace-nowrap hidden sm:flex items-center gap-2"
+                          >
+                            {chain?.hasIcon && chain.iconUrl && (
+                              <img alt={chain.name ?? "Chain"} src={chain.iconUrl} className="w-4 h-4 rounded-full" />
+                            )}
+                            <span>{chain?.name}</span>
+                          </button>
+                          <button
+                            onClick={openAccountModal}
+                            className="px-4 py-2 md:px-6 md:py-2.5 border border-black text-black font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#0066FF] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#0066FF] transition-all whitespace-nowrap"
+                          >
+                            {account.displayName}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              </ConnectButton.Custom>
+            </div>
+          </div>
+
+          {/* Hero Section Content */}
+          <div className="relative flex-1 w-full flex flex-col justify-center px-6 md:px-12 lg:px-24 z-20 pb-20">
+            <div className="max-w-5xl">
+              <h1 className="text-[clamp(3rem,8vw,100px)] font-black text-black leading-[1.1] tracking-tight">
+                Start a{" "}
+                <span className="relative inline-block ml-2 md:ml-4 pointer-events-auto">
+                  <span
+                    className="relative z-10 text-black px-4 md:px-8 py-2 md:py-4 bg-[#0066FF] inline-block transform -rotate-2"
+                    style={{
+                      maskImage: "radial-gradient(circle 24px at top right, transparent 24px, black 25px)",
+                      WebkitMaskImage: "radial-gradient(circle 24px at top right, transparent 24px, black 25px)",
+                    }}
+                  >
+                    Private
+                  </span>
+                  {/* Star Image */}
+                  <div className="absolute -top-6 -right-6 md:-top-8 md:-right-8 w-12 h-12 md:w-16 md:h-16 z-20">
+                    <Image src={starImage} alt="Star" layout="fill" objectFit="contain" />
+                  </div>
+                </span>{" "}
+                <br />
+                OTC Auction
+              </h1>
+
+              {/* Action Buttons */}
+              <div className="mt-12 flex flex-wrap gap-4 md:gap-6 pointer-events-auto">
+                <Link
+                  href="/auction/create"
+                  className="btn bg-black text-white hover:bg-gray-800 border-none rounded-none px-8 md:px-10 py-3 md:py-4 h-auto text-base md:text-xl font-bold shadow-[6px_6px_0px_#0066FF] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_#0066FF] transition-all"
+                >
+                  Create Auction
+                </Link>
+                <Link
+                  href="/profile"
+                  className="btn bg-[#E5E5E5] text-black border-2 border-black hover:bg-black hover:text-white rounded-none px-8 md:px-10 py-3 md:py-4 h-auto text-base md:text-xl font-bold shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  Setup Stealth Keys
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div id="auctions" className="w-full px-6 md:px-12 lg:px-24 mt-16 relative z-20">
+        <div className="flex items-center justify-between flex-wrap gap-3 max-w-7xl mx-auto">
+          <div className="flex gap-2">
+            {(["all", "active", "ended", "mine"] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`btn btn-sm font-bold capitalize rounded-none border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] transition-all ${filter === f ? "bg-black text-white" : "bg-[#E5E5E5] text-black"}`}
+              >
+                {f === "mine" ? "My Auctions" : f}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm font-bold text-black border-2 border-black px-4 py-1 bg-[#E5E5E5] shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+            {nextAuctionId !== undefined ? `${Number(nextAuctionId)} total auctions` : "Loading..."}
+          </p>
+        </div>
+      </div>
+
+      {/* Auction grid */}
+      <div className="w-full px-6 md:px-12 lg:px-24 py-8 flex-1 relative z-20">
+        <div className="max-w-7xl mx-auto">
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <span className="loading loading-spinner loading-lg text-[#0066FF]" />
+            </div>
+          ) : auctions.length === 0 ? (
+            <div className="text-center py-20 border-4 border-black bg-[#E5E5E5] shadow-[8px_8px_0px_#0066FF] max-w-2xl mx-auto">
+              <div className="text-6xl mb-4 text-black opacity-50 font-black">0</div>
+              <h3 className="text-2xl font-black text-black mb-2">No auctions yet</h3>
+              <p className="text-base text-black font-medium mb-8">Be the first to create a sealed-bid auction.</p>
+              <Link
+                href="/auction/create"
+                className="btn bg-[#0066FF] text-black border-2 border-black hover:bg-[#0055DD] rounded-none px-8 text-lg font-bold shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all"
+              >
+                Create Auction
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {auctions.map(entry => (
+                <AuctionListItem key={entry.id} auctionId={entry.id} filter={filter} userAddress={address} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
 
-const Home: NextPage = () => {
-  const [active, setActive] = useState<NavItem>("HOME");
-  const [isDark, setIsDark] = useState(false);
+// Individual auction item that fetches its own data via hooks
+const AuctionListItem = ({
+  auctionId,
+  filter,
+  userAddress,
+}: {
+  auctionId: number;
+  filter: "all" | "active" | "ended" | "mine";
+  userAddress: string | undefined;
+}) => {
+  const { data: auctionData } = useScaffoldReadContract({
+    contractName: "PenumbraAuction",
+    functionName: "getAuction",
+    args: [BigInt(auctionId)],
+  });
 
-  const bg = isDark ? "#111111" : "#f4ece3";
-  const fg = isDark ? "#f4ece3" : "#111111";
-  const accent = "#4b35f7";
+  const { data: phase } = useScaffoldReadContract({
+    contractName: "PenumbraAuction",
+    functionName: "getAuctionPhase",
+    args: [BigInt(auctionId)],
+  });
 
-  const handleNav = (item: NavItem) => {
-    setActive(item);
-    const el = document.getElementById(item.toLowerCase());
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  const { data: bidders } = useScaffoldReadContract({
+    contractName: "PenumbraAuction",
+    functionName: "getAuctionBidders",
+    args: [BigInt(auctionId)],
+  });
+
+  if (!auctionData || phase === undefined) {
+    return (
+      <div className="card bg-base-100 shadow-xl border border-base-300 animate-pulse">
+        <div className="card-body p-6">
+          <div className="h-6 bg-base-300 rounded w-1/3 mb-3" />
+          <div className="h-4 bg-base-300 rounded w-2/3 mb-2" />
+          <div className="h-20 bg-base-300 rounded mb-2" />
+          <div className="h-4 bg-base-300 rounded w-1/2" />
+        </div>
+      </div>
+    );
+  }
+
+  const d = auctionData as unknown as {
+    seller: string;
+    tokenAddress: string;
+    tokenAmount: bigint;
+    minimumBid: bigint;
+    commitDeadline: bigint;
+    revealDeadline: bigint;
+    winner: string;
+    winningBid: bigint;
+    winnerStealthAddress: string;
+    settled: boolean;
+    cancelled: boolean;
   };
 
-  return (
-    <div className={`w-full font-sans ${winkyMilky.variable}`} style={{ backgroundColor: bg, color: fg }}>
-      {/* ══════════════════════════════════════════
-          HERO — full-viewport  |  p-8 = even more blue
-      ══════════════════════════════════════════ */}
-      <section id="home" className="w-full h-screen bg-[#4b35f7] p-8 flex" style={{ minHeight: "100dvh" }}>
-        {/* Inner cream / dark rectangle */}
-        <div
-          className="relative flex-1 rounded-[24px] overflow-hidden transition-colors duration-300 shadow-[0_0_0_1px_rgba(0,0,0,0.1)]"
-          style={{ backgroundColor: bg }}
-        >
-          {/* Interactive hover grid */}
-          <HoverGrid />
+  const auction: AuctionData = {
+    seller: d.seller,
+    tokenAddress: d.tokenAddress,
+    tokenAmount: d.tokenAmount,
+    minimumBid: d.minimumBid,
+    commitDeadline: d.commitDeadline,
+    revealDeadline: d.revealDeadline,
+    winner: d.winner,
+    winningBid: d.winningBid,
+    winnerStealthAddress: d.winnerStealthAddress,
+    settled: d.settled,
+    cancelled: d.cancelled,
+  };
 
-          {/* Texture squares — behind UI, behind grid */}
-          {[
-            [80, 320],
-            [240, 480],
-            [480, 240],
-            [560, 800],
-            [160, 880],
-            [400, 1040],
-            [640, 560],
-          ].map(([t, l], i) => (
-            <div
-              key={i}
-              className="absolute pointer-events-none"
-              style={{
-                top: t,
-                left: l,
-                width: 80,
-                height: 80,
-                zIndex: 0,
-                backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "#e8e0d6",
-              }}
-            />
-          ))}
+  const currentPhase = phase as AuctionPhase;
+  const bidderCount = bidders ? (bidders as readonly string[]).length : 0;
 
-          {/* ── Top bar ── */}
-          <div className="absolute top-0 left-0 w-full px-8 py-6 flex justify-between items-start z-20">
-            {/* Avatar */}
-            <div className="w-14 h-14 rounded-full overflow-hidden shadow-md flex-shrink-0 transition-transform hover:scale-105">
-              <Image
-                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Dash&backgroundColor=b6e3f4"
-                alt="Avatar"
-                width={56}
-                height={56}
-                className="w-full h-full object-cover bg-white"
-              />
-            </div>
+  // Apply filters
+  if (filter === "active" && currentPhase !== AuctionPhase.COMMIT && currentPhase !== AuctionPhase.REVEAL) return null;
+  if (filter === "ended" && currentPhase !== AuctionPhase.ENDED && currentPhase !== AuctionPhase.CANCELLED) return null;
+  if (filter === "mine" && userAddress && auction.seller.toLowerCase() !== userAddress.toLowerCase()) return null;
 
-            {/* Centre logo */}
-            <div
-              className="font-black text-[28px] leading-[0.9] p-3 pt-4 tracking-widest text-center cursor-pointer select-none transition-transform hover:scale-105"
-              style={{ backgroundColor: fg, color: bg }}
-              onClick={() => handleNav("HOME")}
-            >
-              <span className="block">DA</span>
-              <span className="block">SH</span>
-            </div>
-
-            {/* Nav drawer */}
-            <div
-              className="w-[190px] border-[1.5px] flex flex-col shadow-[4px_4px_0px_0px_rgba(0,0,0,0.08)] transition-transform hover:scale-105"
-              style={{ backgroundColor: bg, borderColor: fg }}
-            >
-              <div
-                className="text-[10px] font-bold p-3 px-4 flex justify-between items-center tracking-widest"
-                style={{ backgroundColor: fg, color: bg }}
-              >
-                <span>DASHBOARD</span>
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: bg }} />
-              </div>
-
-              <div className="p-5 py-4 flex flex-col gap-[11px] text-[11px] font-bold tracking-[0.15em]">
-                {NAV_ITEMS.map(item => (
-                  <button
-                    key={item}
-                    onClick={() => handleNav(item)}
-                    className="flex items-center justify-between w-full text-left transition-colors duration-150 hover:opacity-60 group"
-                    style={{ color: active === item ? accent : fg }}
-                  >
-                    <span>{item}</span>
-                    {active === item && (
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Light / Dark toggle */}
-              <div
-                className="px-5 py-4 border-t-[1.5px] flex flex-col gap-3 text-[10px] font-bold tracking-widest"
-                style={{ borderColor: `${fg}33` }}
-              >
-                {([false, true] as const).map(dark => (
-                  <button
-                    key={String(dark)}
-                    onClick={() => setIsDark(dark)}
-                    className="flex items-center gap-3 w-full transition-opacity"
-                    style={{ color: fg, opacity: isDark === dark ? 1 : 0.38 }}
-                  >
-                    <div
-                      className="w-[13px] h-[13px] rounded-full border-[1.5px] flex items-center justify-center flex-shrink-0"
-                      style={{ borderColor: fg }}
-                    >
-                      {isDark === dark && (
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
-                      )}
-                    </div>
-                    {dark ? "DARK" : "LIGHT"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ── CTA — moved up from bottom ── */}
-          <div className="absolute bottom-[26%] left-[8%] z-20 select-none">
-            <p className="font-bold text-xs tracking-[0.25em] mb-5" style={{ color: accent }}>
-              THIS IS DASH
-            </p>
-
-            <div className="flex items-center flex-wrap gap-y-2 font-black">
-              <div
-                className="transform -rotate-[3deg] px-6 py-1 shadow-lg origin-bottom-left"
-                style={{ backgroundColor: accent }}
-              >
-                <span
-                  className="text-5xl md:text-7xl lg:text-[90px] tracking-[-0.03em] block uppercase leading-none pt-2 font-winky"
-                  style={{ color: bg }}
-                >
-                  ALMOST
-                </span>
-              </div>
-              <span
-                className="text-5xl md:text-7xl lg:text-[90px] tracking-[-0.03em] ml-5 uppercase leading-none pt-2 font-winky"
-                style={{ color: fg }}
-              >
-                THE
-              </span>
-              <span className="text-2xl md:text-4xl ml-1 self-start mt-3" style={{ color: accent }}>
-                *
-              </span>
-            </div>
-
-            <div
-              className="text-5xl md:text-7xl lg:text-[90px] font-black tracking-[-0.03em] leading-[0.9] mt-4 uppercase font-winky"
-              style={{ color: fg }}
-            >
-              BEST TECH
-            </div>
-            <div
-              className="text-5xl md:text-7xl lg:text-[90px] font-black tracking-[-0.03em] leading-[0.9] uppercase mt-1 font-winky"
-              style={{ color: fg }}
-            >
-              COMPANY
-            </div>
-
-            <div className="mt-10 flex items-center gap-4">
-              <button
-                onClick={() => handleNav("ABOUT")}
-                className="px-8 py-4 text-xs font-black tracking-widest uppercase border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:bg-black active:text-white"
-                style={{ backgroundColor: accent, color: "#f4ece3" }}
-              >
-                EXPLORE →
-              </button>
-              <button
-                onClick={() => handleNav("WORK")}
-                className="px-8 py-4 text-xs font-black tracking-widest uppercase border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:bg-black active:text-white"
-                style={{ borderColor: fg, color: fg }}
-              >
-                OUR WORK
-              </button>
-            </div>
-          </div>
-        </div>
-        {/* end rectangle */}
-      </section>
-
-      {/* ══════════════════════════════════════════
-          SCROLL SECTIONS
-      ══════════════════════════════════════════ */}
-
-      {/* ── ABOUT ── */}
-      <section
-        id="about"
-        className="w-full min-h-screen flex flex-col md:flex-row transition-colors duration-300"
-        style={{ backgroundColor: accent, color: "#f4ece3" }}
-      >
-        <div className="flex-1 flex flex-col justify-center px-[8%] py-20">
-          <p className="text-[10px] font-bold tracking-[0.3em] mb-6 opacity-60">01 — ABOUT</p>
-          <h2 className="text-5xl md:text-7xl font-black tracking-tight uppercase leading-[0.9] mb-10 font-winky">
-            Who
-            <br />
-            We Are
-          </h2>
-          <p className="max-w-md text-lg leading-relaxed opacity-80 border-l-4 border-black pl-6">
-            DASH is a design-first technology studio building products at the intersection of web3, privacy, and
-            beautiful interfaces. We obsess over craft, clarity, and impact.
-          </p>
-        </div>
-        <div
-          className="w-full md:w-[45%] flex items-center justify-center p-12 border-l-2 border-black"
-          style={{ backgroundColor: "rgba(0,0,0,0.12)" }}
-        >
-          <div className="text-[120px] md:text-[200px] font-black leading-none tracking-[-0.05em] opacity-20 select-none font-winky">
-            01
-          </div>
-        </div>
-      </section>
-
-      {/* ── WORK ── */}
-      <section
-        id="work"
-        className="w-full py-24 px-[6%] transition-colors duration-300"
-        style={{ backgroundColor: bg, color: fg }}
-      >
-        <p className="text-[10px] font-bold tracking-[0.3em] mb-4 opacity-50">02 — WORK</p>
-        <h2 className="text-5xl md:text-7xl font-black tracking-tight uppercase leading-[0.9] mb-16 font-winky">
-          Selected
-          <br />
-          Projects
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[
-            { name: "Penumbra", desc: "Privacy-first Web3 protocol", tag: "Web3" },
-            { name: "DarkAuction", desc: "Sealed-bid OTC auction engine", tag: "DeFi" },
-            { name: "Stealth Pay", desc: "Anonymous on-chain payments", tag: "Privacy" },
-          ].map((proj, i) => (
-            <div
-              key={proj.name}
-              className="group p-10 border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] cursor-pointer transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none hover:bg-[#4b35f7] hover:text-[#f4ece3]"
-            >
-              <p className="text-[10px] tracking-widest font-bold mb-6 opacity-40">0{i + 1}</p>
-              <h3 className="text-2xl font-black tracking-wide uppercase mb-3 font-winky">{proj.name}</h3>
-              <p className="text-sm opacity-60 mb-6">{proj.desc}</p>
-              <span className="inline-block text-[9px] font-black tracking-[0.2em] px-3 py-1 border-2 border-black opacity-50 bg-white text-black">
-                {proj.tag}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── CREW ── */}
-      <section
-        id="crew"
-        className="w-full py-24 px-[6%] transition-colors duration-300"
-        style={{ backgroundColor: isDark ? "#1a1a1a" : "#111111", color: "#f4ece3" }}
-      >
-        <p className="text-[10px] font-bold tracking-[0.3em] mb-4 opacity-40">03 — CREW</p>
-        <h2 className="text-5xl md:text-7xl font-black tracking-tight uppercase leading-[0.9] mb-16 font-winky">
-          The Team
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {["Alice", "Bob", "Carol", "Dave"].map(name => (
-            <div key={name} className="group cursor-pointer">
-              <div className="w-full aspect-square rounded-2xl overflow-hidden mb-4 bg-[#222] border-2 border-[#f4ece3] shadow-[4px_4px_0px_0px_#f4ece3] transition-all group-hover:shadow-none group-hover:translate-x-[2px] group-hover:translate-y-[2px]">
-                <Image
-                  src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${name}&backgroundColor=b6e3f4`}
-                  alt={name}
-                  width={200}
-                  height={200}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <p className="font-black text-sm tracking-widest uppercase group-hover:text-[#4b35f7] transition-colors">
-                {name}
-              </p>
-              <p className="text-[10px] tracking-widest opacity-40 mt-1">Builder</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── CAREERS ── */}
-      <section
-        id="careers"
-        className="w-full min-h-[60vh] flex flex-col justify-center px-[8%] py-24 transition-colors duration-300"
-        style={{ backgroundColor: bg, color: fg }}
-      >
-        <p className="text-[10px] font-bold tracking-[0.3em] mb-4 opacity-50">04 — CAREERS</p>
-        <h2 className="text-5xl md:text-7xl font-black tracking-tight uppercase leading-[0.9] mb-8 font-winky">
-          Join Us
-        </h2>
-        <p className="max-w-lg text-lg leading-relaxed mb-10 opacity-70 border-l-4 border-black pl-6">
-          We&apos;re always looking for bold, curious builders. Drop us a line.
-        </p>
-        <button
-          className="self-start px-10 py-4 text-xs font-black tracking-widest uppercase border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none hover:bg-[#4b35f7] hover:text-[#f4ece3]"
-          style={{ borderColor: fg, color: fg }}
-          onClick={() => document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" })}
-        >
-          Get In Touch →
-        </button>
-      </section>
-
-      {/* ── STORES ── */}
-      <section
-        id="stores"
-        className="w-full py-24 px-[6%] transition-colors duration-300"
-        style={{ backgroundColor: accent, color: "#f4ece3" }}
-      >
-        <p className="text-[10px] font-bold tracking-[0.3em] mb-4 opacity-60">05 — STORES</p>
-        <h2 className="text-5xl md:text-7xl font-black tracking-tight uppercase leading-[0.9] mb-16 font-winky">
-          Find Us
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
-          {["New York", "Berlin"].map(city => (
-            <div
-              key={city}
-              className="border-2 border-black bg-[#f4ece3] text-black p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all cursor-pointer"
-            >
-              <p className="font-black text-2xl tracking-widest uppercase mb-2 font-winky">{city}</p>
-              <p className="text-sm opacity-60">Open Mon–Fri, 9am–6pm</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── CONTACT ── */}
-      <section
-        id="contact"
-        className="w-full py-24 px-[8%] transition-colors duration-300"
-        style={{ backgroundColor: bg, color: fg }}
-      >
-        <p className="text-[10px] font-bold tracking-[0.3em] mb-4 opacity-50">06 — CONTACT</p>
-        <h2 className="text-5xl md:text-7xl font-black tracking-tight uppercase leading-[0.9] mb-16 font-winky">
-          Say Hello
-        </h2>
-        <form
-          className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl"
-          onSubmit={e => {
-            e.preventDefault();
-            alert("Message sent!");
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Your name"
-            required
-            className="border-2 border-black bg-white p-4 text-sm tracking-wide outline-none focus:shadow-[4px_4px_0px_0px_#4b35f7] transition-all text-black"
-          />
-          <input
-            type="email"
-            placeholder="Email address"
-            required
-            className="border-2 border-black bg-white p-4 text-sm tracking-wide outline-none focus:shadow-[4px_4px_0px_0px_#4b35f7] transition-all text-black"
-          />
-          <textarea
-            placeholder="Your message"
-            rows={4}
-            required
-            className="border-2 border-black bg-white p-4 text-sm tracking-wide outline-none resize-none focus:shadow-[4px_4px_0px_0px_#4b35f7] transition-all md:col-span-2 text-black"
-          />
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              className="px-12 py-4 text-xs font-black tracking-widest uppercase border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:bg-black active:text-white"
-              style={{ backgroundColor: accent, color: "#f4ece3" }}
-            >
-              SEND MESSAGE →
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* ── Footer ── */}
-      <footer
-        className="w-full px-[8%] py-8 flex justify-between items-center text-[10px] font-bold tracking-widest border-t-2 border-black transition-colors duration-300"
-        style={{ backgroundColor: bg, color: `${fg}44` }}
-      >
-        <span>© 2026 DASH</span>
-        <span>ALL RIGHTS RESERVED</span>
-      </footer>
-    </div>
-  );
+  return <AuctionCard auctionId={auctionId} auction={auction} phase={currentPhase} bidderCount={bidderCount} />;
 };
 
 export default Home;

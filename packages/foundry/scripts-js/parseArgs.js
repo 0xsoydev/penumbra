@@ -153,9 +153,68 @@ process.env.DEPLOY_SCRIPT = `script/${fileName}`;
 process.env.RPC_URL = network;
 process.env.ETH_KEYSTORE_ACCOUNT = selectedKeystore;
 
-const result = spawnSync("make", ["deploy-and-generate-abis"], {
+// Execute deploy command
+const deployScript = `script/${fileName}`;
+const rpcUrl = network;
+const keystore = selectedKeystore;
+
+console.log(`Running deploy script: ${deployScript} on ${rpcUrl}`);
+
+const deployArgs = [
+  "script",
+  deployScript,
+  "--rpc-url",
+  rpcUrl,
+  "--broadcast",
+  "--ffi",
+];
+
+if (rpcUrl === "localhost") {
+  if (keystore === "scaffold-eth-default") {
+    deployArgs.push("--password", "localhost");
+    // Also need to use the imported keystore?
+    // forge script uses --account <keystore> or implicit default?
+    // Wait, the makefile doesn't specify --account explicitly, it relies on default sender?
+    // Ah, wait. `forge script` will use the default account if not specified?
+    // The makefile rule for `deploy` uses `forge script ...` but doesn't pass `--account` or `--sender`.
+    // However, `cast wallet import ... scaffold-eth-default` imports it as `scaffold-eth-default`.
+    // Does `forge script` automatically use `scaffold-eth-default`?
+    // No, usually you need `--account`.
+    // But `setup-anvil-wallet` imports it as `scaffold-eth-default`.
+    // Let's re-read the Makefile carefully.
+    
+    // Makefile:
+    // deploy:
+    // ...
+    // forge script $(DEPLOY_SCRIPT) --rpc-url localhost --password localhost --broadcast --ffi;
+    
+    // It doesn't seem to pass `--account`. Maybe `foundry.toml` sets a default sender?
+    // Or maybe `forge script` picks up the only keystore available?
+    // Or maybe `Deploy.s.sol` handles the sender?
+    
+    // Let's check `packages/foundry/foundry.toml` later.
+    // For now, I'll stick to what the Makefile does.
+  }
+}
+
+// Add legacy support for non-make environment?
+// Actually, `spawnSync("make"...)` inherited stdio, so it ran in the shell environment where these vars were set?
+// No, I'm replacing `make`.
+
+const deployResult = spawnSync("forge", deployArgs, {
   stdio: "inherit",
   shell: true,
 });
 
-process.exit(result.status);
+if (deployResult.status !== 0) {
+  process.exit(deployResult.status);
+}
+
+// Execute generate-abis
+console.log("Generating ABIs...");
+const generateAbisResult = spawnSync("node", ["scripts-js/generateTsAbis.js"], {
+  stdio: "inherit",
+  shell: true,
+});
+
+process.exit(generateAbisResult.status);

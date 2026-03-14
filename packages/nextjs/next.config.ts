@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true",
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "api.dicebear.com",
+      },
+    ],
+  },
   // Externalize heavy Node.js-only packages so webpack doesn't try to bundle them
   // (BitGo SDK has WASM deps, umbra-js uses Node crypto, ethers v5 is large)
   serverExternalPackages: [

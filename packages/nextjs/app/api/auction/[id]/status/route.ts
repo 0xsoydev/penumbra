@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "~~/db";
 import { auctions, deposits } from "~~/db/schema";
+import { getAuctionPhase, getCommitCount, getAuction as getOnChainAuction } from "~~/services/penumbra/contract";
 
 /**
  * GET /api/auction/[id]/status
  *
- * Return auction details and deposit confirmation status.
- * Used by the frontend to poll whether bidder deposits have been confirmed.
+ * Return auction details including on-chain phase, bid count,
+ * and deposit confirmation status. Privacy-preserving — does NOT
+ * expose bidder addresses or bid amounts to the caller.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,15 +19,34 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Invalid auction ID" }, { status: 400 });
     }
 
-    // Fetch auction
+    // Fetch auction from DB
     const [auction] = await db.select().from(auctions).where(eq(auctions.id, auctionId));
 
     if (!auction) {
       return NextResponse.json({ error: "Auction not found" }, { status: 404 });
     }
 
-    // Fetch all deposits for this auction
+    // Fetch on-chain state
+    let onChain;
+    let phase;
+    let bidCount;
+    try {
+      [onChain, phase, bidCount] = await Promise.all([
+        getOnChainAuction(auctionId),
+        getAuctionPhase(auctionId),
+        getCommitCount(auctionId),
+      ]);
+    } catch (err) {
+      console.warn("Failed to fetch on-chain data:", err);
+      onChain = null;
+      phase = null;
+      bidCount = null;
+    }
+
+    // Fetch deposits (privacy-safe summary — no addresses exposed)
     const auctionDeposits = await db.select().from(deposits).where(eq(deposits.auctionId, auctionId));
+
+    const phaseNames = ["COMMIT", "SETTLE", "ENDED", "CANCELLED"];
 
     return NextResponse.json({
       auction: {
@@ -35,12 +56,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         docCid: auction.docCid,
         createdAt: auction.createdAt,
       },
-      deposits: auctionDeposits.map(d => ({
-        bidderAddress: d.bidderAddress,
-        depositAddress: d.bitgoDepositAddress,
-        amountWei: d.amountWei,
-        confirmed: d.confirmed,
-      })),
+      onChain: onChain
+        ? {
+            phase: phase !== null ? phaseNames[phase] || "UNKNOWN" : "UNKNOWN",
+            commitDeadline: onChain.commitDeadline?.toString(),
+            settleDeadline: onChain.settleDeadline?.toString(),
+            winnerDeclared:
+              onChain.winningNullifier !== "0x0000000000000000000000000000000000000000000000000000000000000000",
+            claimed: onChain.claimed,
+            cancelled: onChain.cancelled,
+            bidCount,
+          }
+        : null,
+      deposits: {
+        total: auctionDeposits.length,
+        committed: auctionDeposits.filter(d => d.committed).length,
+        confirmed: auctionDeposits.filter(d => d.confirmed).length,
+        // Only show deposit status for the caller (if they provide their address)
+        // We don't expose other bidders' info
+      },
     });
   } catch (error) {
     console.error("auction/[id]/status error:", error);

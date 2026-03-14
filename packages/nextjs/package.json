@@ -16,11 +16,13 @@
     "vercel:yolo": "vercel --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=false --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env NEXT_PUBLIC_IGNORE_BUILD_ERROR=true --build-env VERCEL_TELEMETRY_DISABLED=1"
   },
   "dependencies": {
+    "@aztec/bb.js": "4.0.0-nightly.20260120",
     "@bitgo/sdk-api": "^1.75.4",
     "@bitgo/sdk-coin-eth": "^25.6.6",
     "@bitgo/sdk-core": "^36.34.0",
     "@heroicons/react": "~2.1.5",
     "@neondatabase/serverless": "^1.0.2",
+    "@noir-lang/noir_js": "1.0.0-beta.19",
     "@rainbow-me/rainbowkit": "2.2.9",
     "@react-native-async-storage/async-storage": "~2.2.0",
     "@scaffold-ui/components": "^0.1.8",

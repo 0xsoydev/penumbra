@@ -1,5 +1,5 @@
 {
-  "0x5dfBd7e43D207F3C1c67e5d81a28593bEC0981E7": "PenumbraToken",
-  "0xDFa35B4e287a91468e0308F8475ADf11E5e59A5e": "PenumbraAuction",
+  "0x3296eAF67350cFC643DfBF70139fe46b5589dc4c": "PenumbraAuction",
+  "0xe58D9Df25D1AD8Ab3391A3730f0690aAa188d483": "HonkVerifier",
   "networkName": "base-sepolia"
 }

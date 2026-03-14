@@ -61,6 +61,11 @@ export type AuctionStatusResponse = {
     committed: number;
     confirmed: number;
   };
+  payout?: {
+    paid: boolean;
+    bitgoTxId: string | null;
+    winningBidWei: string | null;
+  };
 };
 
 export type StealthAnnouncement = {

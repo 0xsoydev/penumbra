@@ -48,6 +48,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const phaseNames = ["COMMIT", "SETTLE", "ENDED", "CANCELLED"];
 
+    // Build payout info (only if settlement has happened)
+    const winningDeposit = auctionDeposits.find(d => d.isWinner);
+    const payout = auction.payoutTxId
+      ? {
+          paid: true,
+          bitgoTxId: auction.payoutTxId,
+          winningBidWei: winningDeposit?.bidAmount ?? null,
+        }
+      : {
+          paid: false,
+          bitgoTxId: null,
+          winningBidWei: winningDeposit?.bidAmount ?? null,
+        };
+
     return NextResponse.json({
       auction: {
         id: auction.id,
@@ -72,9 +86,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         total: auctionDeposits.length,
         committed: auctionDeposits.filter(d => d.committed).length,
         confirmed: auctionDeposits.filter(d => d.confirmed).length,
-        // Only show deposit status for the caller (if they provide their address)
-        // We don't expose other bidders' info
       },
+      payout,
     });
   } catch (error) {
     console.error("auction/[id]/status error:", error);

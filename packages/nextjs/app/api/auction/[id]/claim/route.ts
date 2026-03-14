@@ -4,6 +4,9 @@ import { db } from "~~/db";
 import { deposits } from "~~/db/schema";
 import { computeNullifier, generateClaimProof } from "~~/services/penumbra/zkproof";
 
+// ZK proof generation takes ~7s locally, can be slower on Vercel's 2-core machine
+export const maxDuration = 60;
+
 /**
  * POST /api/auction/[id]/claim
  *

@@ -5,6 +5,9 @@ import { auctions, deposits } from "~~/db/schema";
 import { declareWinner as declareWinnerOnChain, getAuction as getOnChainAuction } from "~~/services/penumbra/contract";
 import { executePayout } from "~~/services/penumbra/payout";
 
+// Settlement involves on-chain tx + BitGo API calls
+export const maxDuration = 60;
+
 /**
  * POST /api/auction/[id]/settle
  *

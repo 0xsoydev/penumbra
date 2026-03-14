@@ -11,15 +11,12 @@ import { join } from "path";
 // ----------------------------------------------------------------
 
 // Load compiled circuit artifact
-const CIRCUIT_PATH = join(
-  process.cwd(),
-  "..",
-  "foundry",
-  "circuits",
-  "nullifier_claim",
-  "target",
-  "nullifier_claim.json",
-);
+// Primary: local copy in packages/nextjs/data/ (works on Vercel)
+// Fallback: original location in packages/foundry/ (works in local dev)
+const CIRCUIT_PATHS = [
+  join(process.cwd(), "data", "circuits", "nullifier_claim.json"),
+  join(process.cwd(), "..", "foundry", "circuits", "nullifier_claim", "target", "nullifier_claim.json"),
+];
 
 let circuitArtifact: any = null;
 let noirInstance: InstanceType<typeof Noir> | null = null;
@@ -28,7 +25,19 @@ let bbInstance: InstanceType<typeof Barretenberg> | null = null;
 
 function getCircuit() {
   if (!circuitArtifact) {
-    const raw = readFileSync(CIRCUIT_PATH, "utf-8");
+    let raw: string | null = null;
+    for (const p of CIRCUIT_PATHS) {
+      try {
+        raw = readFileSync(p, "utf-8");
+        console.log(`[zkproof] Loaded circuit from: ${p}`);
+        break;
+      } catch {
+        // Try next path
+      }
+    }
+    if (!raw) {
+      throw new Error(`Circuit artifact not found. Tried: ${CIRCUIT_PATHS.join(", ")}`);
+    }
     circuitArtifact = JSON.parse(raw);
   }
   return circuitArtifact;

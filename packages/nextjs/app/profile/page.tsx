@@ -147,8 +147,8 @@ const Profile: NextPage = () => {
               d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
             />
           </svg>
-          <h2 className="text-3xl font-black mb-4 text-black uppercase">Connect Wallet</h2>
-          <p className="text-base font-bold text-black border-2 border-black px-4 py-2 bg-[#E5E5E5] shadow-[2px_2px_0px_#000]">
+          <h2 className="text-3xl font-winky font-normal tracking-wide mb-4 text-black uppercase">Connect Wallet</h2>
+          <p className="font-dm text-base font-bold text-black border-2 border-black px-4 py-2 bg-[#E5E5E5] shadow-[2px_2px_0px_#000]">
             Connect a wallet to view your profile and manage stealth keys.
           </p>
         </div>
@@ -162,13 +162,15 @@ const Profile: NextPage = () => {
         {/* Header */}
         <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-5xl md:text-6xl font-black tracking-tight mb-2 text-black uppercase">Dashboard</h1>
+            <h1 className="font-winky text-5xl md:text-6xl font-normal tracking-wide mb-2 text-black uppercase">
+              Dashboard
+            </h1>
             <p className="text-lg font-bold text-black bg-white border-2 border-black px-6 py-2 inline-block shadow-[4px_4px_0px_#0066FF]">
               Manage your stealth keys and bids.
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm font-bold bg-white border-4 border-black px-4 py-2 shadow-[4px_4px_0px_#000]">
-            <span className="uppercase tracking-wider">Connected:</span>
+            <span className="font-fira uppercase tracking-wider">Connected:</span>
             <Address address={address} size="sm" />
           </div>
         </div>
@@ -178,7 +180,7 @@ const Profile: NextPage = () => {
           <div className="bg-white border-4 border-black shadow-[8px_8px_0px_#0066FF] relative flex flex-col">
             <div className="absolute top-0 right-0 w-16 h-16 bg-[#0066FF] opacity-10 rounded-bl-full"></div>
             <div className="p-6 md:p-8 flex-1 flex flex-col">
-              <h2 className="text-2xl font-black uppercase flex items-center gap-3 mb-4 text-black border-b-4 border-black pb-4">
+              <h2 className="text-2xl font-winky font-normal tracking-wide uppercase flex items-center gap-3 mb-4 text-black border-b-4 border-black pb-4">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -196,7 +198,7 @@ const Profile: NextPage = () => {
                 Stealth Keys
               </h2>
 
-              <p className="text-sm font-bold text-black/70 mb-6">
+              <p className="font-dm text-sm font-bold text-black/70 mb-6">
                 Stealth keys enable private payments. Register them once to receive auction winnings and payments at
                 stealth addresses that cannot be linked to your wallet.
               </p>
@@ -215,25 +217,25 @@ const Profile: NextPage = () => {
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                       </svg>
-                      <span className="text-lg font-black uppercase tracking-wider">Keys Registered!</span>
+                      <span className="font-fira text-lg font-bold uppercase tracking-wider">Keys Registered!</span>
                     </div>
 
                     {spendingPubKey && (
                       <div className="bg-[#E5E5E5] border-2 border-black p-4 shadow-[2px_2px_0px_#000]">
-                        <p className="text-xs font-black uppercase tracking-wider text-black mb-2">
+                        <p className="font-fira text-xs font-bold uppercase tracking-wider text-black mb-2">
                           Spending Public Key
                         </p>
-                        <p className="font-mono text-xs break-all text-black/80 font-bold bg-white p-2 border border-black">
+                        <p className="font-fira text-xs break-all text-black/80 font-bold bg-white p-2 border border-black">
                           {spendingPubKey.slice(0, 20)}...{spendingPubKey.slice(-16)}
                         </p>
                       </div>
                     )}
                     {viewingPubKey && (
                       <div className="bg-[#E5E5E5] border-2 border-black p-4 shadow-[2px_2px_0px_#000]">
-                        <p className="text-xs font-black uppercase tracking-wider text-black mb-2">
+                        <p className="font-fira text-xs font-bold uppercase tracking-wider text-black mb-2">
                           Viewing Public Key
                         </p>
-                        <p className="font-mono text-xs break-all text-black/80 font-bold bg-white p-2 border border-black">
+                        <p className="font-fira text-xs break-all text-black/80 font-bold bg-white p-2 border border-black">
                           {viewingPubKey.slice(0, 20)}...{viewingPubKey.slice(-16)}
                         </p>
                       </div>
@@ -244,7 +246,7 @@ const Profile: NextPage = () => {
                     <button
                       onClick={handleRegisterStealthKeys}
                       disabled={registering}
-                      className="w-full py-4 bg-[#0066FF] text-white border-4 border-black font-black text-xl uppercase tracking-wider shadow-[6px_6px_0px_#000000] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_#000000] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      className="w-full py-4 bg-[#0066FF] text-white border-4 border-black font-dm font-bold text-xl uppercase tracking-wider shadow-[6px_6px_0px_#000000] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_#000000] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                       {registering ? (
                         <span className="flex items-center justify-center gap-3">
@@ -256,7 +258,7 @@ const Profile: NextPage = () => {
                       )}
                     </button>
                     <div className="mt-4 bg-[#FFD700] border-2 border-black p-3 shadow-[2px_2px_0px_#000]">
-                      <p className="text-xs font-bold text-black">
+                      <p className="font-dm text-xs font-bold text-black">
                         You will be asked to sign two messages. These signatures are used to derive your stealth key
                         pair deterministically. No private keys leave your device.
                       </p>
@@ -270,7 +272,7 @@ const Profile: NextPage = () => {
           {/* ===== SAVED BIDS ===== */}
           <div className="bg-white border-4 border-black shadow-[8px_8px_0px_#0066FF] relative flex flex-col">
             <div className="p-6 md:p-8 flex-1 flex flex-col">
-              <h2 className="text-2xl font-black uppercase flex items-center gap-3 mb-4 text-black border-b-4 border-black pb-4">
+              <h2 className="text-2xl font-winky font-normal tracking-wide uppercase flex items-center gap-3 mb-4 text-black border-b-4 border-black pb-4">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -287,19 +289,21 @@ const Profile: NextPage = () => {
                 </svg>
                 Saved Bids
               </h2>
-              <p className="text-sm font-bold text-black/70 mb-6">
+              <p className="font-dm text-sm font-bold text-black/70 mb-6">
                 Your committed bid data stored locally. This data is critical for revealing your bids.
               </p>
 
               <div className="flex-1">
                 {savedBids.length === 0 ? (
                   <div className="text-center py-12 bg-[#E5E5E5] border-2 border-black border-dashed">
-                    <p className="text-lg font-black text-black/40 uppercase tracking-wider">No saved bids yet.</p>
+                    <p className="font-fira text-lg font-bold text-black/40 uppercase tracking-wider">
+                      No saved bids yet.
+                    </p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto border-2 border-black">
                     <table className="table w-full">
-                      <thead className="bg-[#E5E5E5] text-black font-black uppercase text-xs border-b-2 border-black">
+                      <thead className="bg-[#E5E5E5] text-black font-fira font-bold uppercase text-xs border-b-2 border-black">
                         <tr>
                           <th className="rounded-none">Auction</th>
                           <th>Amount (Wei)</th>
@@ -307,7 +311,7 @@ const Profile: NextPage = () => {
                           <th className="rounded-none"></th>
                         </tr>
                       </thead>
-                      <tbody className="text-black font-bold text-sm">
+                      <tbody className="text-black font-dm font-bold text-sm">
                         {savedBids.map((bid, i) => (
                           <tr
                             key={bid.auctionId}
@@ -318,7 +322,7 @@ const Profile: NextPage = () => {
                                 #{bid.auctionId}
                               </Link>
                             </td>
-                            <td className="font-mono text-xs">
+                            <td className="font-fira text-xs">
                               {(() => {
                                 try {
                                   return BigInt(bid.bidAmount).toString().slice(0, 12) + "...";
@@ -373,7 +377,7 @@ const Profile: NextPage = () => {
                     d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
                   />
                 </svg>
-                <span className="text-xs font-bold leading-tight">
+                <span className="font-dm text-xs font-bold leading-tight">
                   Bid data is stored in your browser&apos;s localStorage. Clearing browser data will permanently lose
                   this information and you won&apos;t be able to reveal those bids.
                 </span>
@@ -386,7 +390,7 @@ const Profile: NextPage = () => {
         <div className="bg-white border-4 border-black shadow-[8px_8px_0px_#0066FF] mt-8 relative">
           <div className="p-6 md:p-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b-4 border-black pb-4">
-              <h2 className="text-2xl font-black uppercase flex items-center gap-3 text-black">
+              <h2 className="text-2xl font-winky font-normal tracking-wide uppercase flex items-center gap-3 text-black">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -406,13 +410,13 @@ const Profile: NextPage = () => {
               <button
                 onClick={fetchAnnouncements}
                 disabled={announcementsLoading}
-                className="bg-white text-black border-2 border-black font-black uppercase px-6 py-2 shadow-[4px_4px_0px_#000] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_#000] transition-all disabled:opacity-50"
+                className="bg-white text-black border-2 border-black font-dm font-bold uppercase px-6 py-2 shadow-[4px_4px_0px_#000] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_#000] transition-all disabled:opacity-50"
               >
                 {announcementsLoading ? <span className="loading loading-spinner loading-sm" /> : "Refresh"}
               </button>
             </div>
 
-            <p className="text-sm font-bold text-black/70 mb-6">
+            <p className="font-dm text-sm font-bold text-black/70 mb-6">
               These are payments sent to your stealth addresses. Use your viewing key to identify which ones belong to
               you.
             </p>
@@ -433,13 +437,17 @@ const Profile: NextPage = () => {
                     d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
                   />
                 </svg>
-                <p className="text-xl font-black text-black/40 uppercase tracking-wider">No announcements yet.</p>
-                <p className="text-sm font-bold text-black/40 mt-2">Announcements appear after auction settlement.</p>
+                <p className="font-fira text-xl font-bold text-black/40 uppercase tracking-wider">
+                  No announcements yet.
+                </p>
+                <p className="font-dm text-sm font-bold text-black/40 mt-2">
+                  Announcements appear after auction settlement.
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto border-4 border-black">
                 <table className="table w-full">
-                  <thead className="bg-[#0066FF] text-white font-black uppercase text-sm border-b-4 border-black">
+                  <thead className="bg-[#0066FF] text-white font-fira font-bold uppercase text-sm border-b-4 border-black">
                     <tr>
                       <th className="rounded-none py-4">Auction</th>
                       <th className="py-4">Stealth Address</th>
@@ -454,12 +462,12 @@ const Profile: NextPage = () => {
                             #{ann.auctionId}
                           </Link>
                         </td>
-                        <td className="font-mono text-sm py-4">
+                        <td className="font-fira text-sm py-4">
                           <span className="bg-[#E5E5E5] px-2 py-1 border border-black">
                             {ann.stealthAddress.slice(0, 10)}...{ann.stealthAddress.slice(-8)}
                           </span>
                         </td>
-                        <td className="font-mono text-sm py-4">
+                        <td className="font-fira text-sm py-4">
                           <span className="bg-[#E5E5E5] px-2 py-1 border border-black">
                             {ann.ephemeralPublicKey.slice(0, 10)}...{ann.ephemeralPublicKey.slice(-8)}
                           </span>
@@ -493,7 +501,7 @@ const Profile: NextPage = () => {
                 d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"
               />
             </svg>
-            <span className="text-lg font-black uppercase tracking-wider text-black">Browse Auctions</span>
+            <span className="font-fira text-lg font-bold uppercase tracking-wider text-black">Browse Auctions</span>
           </Link>
           <Link
             href="/auction/create"
@@ -509,7 +517,7 @@ const Profile: NextPage = () => {
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            <span className="text-lg font-black uppercase tracking-wider text-black">Create Auction</span>
+            <span className="font-fira text-lg font-bold uppercase tracking-wider text-black">Create Auction</span>
           </Link>
           <Link
             href="/debug"
@@ -529,7 +537,7 @@ const Profile: NextPage = () => {
                 d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z"
               />
             </svg>
-            <span className="text-lg font-black uppercase tracking-wider text-black">Debug Contracts</span>
+            <span className="font-fira text-lg font-bold uppercase tracking-wider text-black">Debug Contracts</span>
           </Link>
         </div>
       </div>

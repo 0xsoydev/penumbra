@@ -33,11 +33,11 @@ export const Navbar = () => {
       <div className="w-full h-[100px] flex items-center justify-between px-6 md:px-12 lg:px-24">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <div className="font-black text-xl md:text-2xl tracking-widest text-black">PENUMBRA</div>
+          <div className="font-winky font-normal text-2xl md:text-3xl text-black">penumbra</div>
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex gap-8 lg:gap-12 text-sm font-medium text-black">
+        <nav className="hidden md:flex gap-8 lg:gap-12 text-sm font-medium text-black font-dm">
           {NAV_LINKS.map(link => (
             <Link
               key={link.href}
@@ -66,19 +66,19 @@ export const Navbar = () => {
                   {!connected ? (
                     <button
                       onClick={openConnectModal}
-                      className="px-4 py-2 md:px-6 md:py-2.5 border border-black text-black font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#0066FF] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#0066FF] transition-all whitespace-nowrap"
+                      className="font-dm px-4 py-2 md:px-6 md:py-2.5 border border-black text-black font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#0066FF] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#0066FF] transition-all whitespace-nowrap"
                     >
                       Connect Wallet
                     </button>
                   ) : chain?.unsupported ? (
                     <button
                       onClick={openChainModal}
-                      className="px-4 py-2 md:px-6 md:py-2.5 border border-black text-red-500 font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#ff0000] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#ff0000] transition-all whitespace-nowrap"
+                      className="font-dm px-4 py-2 md:px-6 md:py-2.5 border border-black text-red-500 font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#ff0000] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#ff0000] transition-all whitespace-nowrap"
                     >
                       Wrong Network
                     </button>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 font-dm">
                       <button
                         onClick={openChainModal}
                         className="px-3 py-2 border border-black text-black font-bold text-xs md:text-sm bg-[#E5E5E5] shadow-[3px_3px_0px_#0066FF] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[2px_2px_0px_#0066FF] transition-all whitespace-nowrap hidden sm:flex items-center gap-2"
@@ -126,7 +126,7 @@ export const Navbar = () => {
 
       {/* Mobile nav dropdown */}
       {mobileOpen && (
-        <nav className="md:hidden border-t border-black bg-[#E5E5E5] flex flex-col">
+        <nav className="md:hidden border-t border-black bg-[#E5E5E5] flex flex-col font-dm">
           {NAV_LINKS.map(link => (
             <Link
               key={link.href}

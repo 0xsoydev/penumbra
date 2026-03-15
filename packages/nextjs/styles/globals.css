@@ -7,6 +7,10 @@
 @theme {
   --shadow-center: 0 0 12px -2px rgb(0 0 0 / 0.05);
   --animate-pulse-fast: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --font-winky: var(--font-winky-milky);
+  --font-fira: var(--font-fira-code);
+  --font-dm: var(--font-dm-sans);
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 @plugin "daisyui" {

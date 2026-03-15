@@ -77,7 +77,7 @@ export const AuctionList = () => {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`btn btn-sm font-bold capitalize rounded-none border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] transition-all ${filter === f ? "bg-black text-white" : "bg-[#E5E5E5] text-black"}`}
+                className={`px-4 py-1.5 font-bold capitalize rounded-none border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] transition-all text-sm ${filter === f ? "bg-black text-white" : "bg-[#E5E5E5] text-black"}`}
               >
                 {f === "mine" ? "My Auctions" : f}
               </button>
@@ -94,7 +94,7 @@ export const AuctionList = () => {
         <div className="max-w-7xl mx-auto">
           {loading ? (
             <div className="flex justify-center py-20">
-              <span className="loading loading-spinner loading-lg text-[#0066FF]" />
+              <div className="w-12 h-12 border-4 border-black border-t-[#0066FF] rounded-full animate-spin" />
             </div>
           ) : auctions.length === 0 ? (
             <div className="text-center py-20 border-4 border-black bg-[#E5E5E5] shadow-[8px_8px_0px_#0066FF] max-w-2xl mx-auto">
@@ -103,7 +103,7 @@ export const AuctionList = () => {
               <p className="text-base text-black font-medium mb-8">Be the first to create a sealed-bid auction.</p>
               <Link
                 href="/auction/create"
-                className="btn bg-[#0066FF] text-black border-2 border-black hover:bg-[#0055DD] rounded-none px-8 text-lg font-bold shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all"
+                className="inline-block bg-[#0066FF] text-black border-2 border-black hover:bg-[#0055DD] rounded-none px-8 py-3 text-lg font-bold shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all"
               >
                 Create Auction
               </Link>

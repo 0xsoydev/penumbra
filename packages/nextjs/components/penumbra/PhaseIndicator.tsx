@@ -10,5 +10,9 @@ type PhaseIndicatorProps = {
 export const PhaseIndicator = ({ phase, size = "md" }: PhaseIndicatorProps) => {
   const sizeClass = size === "sm" ? "badge-sm" : size === "lg" ? "badge-lg" : "badge-md";
 
-  return <span className={`badge ${PHASE_COLORS[phase]} ${sizeClass} font-bold`}>{PHASE_LABELS[phase]}</span>;
+  return (
+    <span className={`badge ${PHASE_COLORS[phase]} ${sizeClass} font-fira font-bold uppercase tracking-wider`}>
+      {PHASE_LABELS[phase]}
+    </span>
+  );
 };

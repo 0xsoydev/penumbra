@@ -44,8 +44,8 @@ export const CountdownTimer = ({ deadline, label }: CountdownTimerProps) => {
 
   return (
     <div className="flex flex-col items-center">
-      <span className="text-xs font-semibold uppercase tracking-wider opacity-60">{label}</span>
-      <span className={`font-mono text-lg font-bold ${isExpired ? "text-error" : "text-base-content"}`}>
+      <span className="font-fira text-xs font-bold uppercase tracking-[0.15em] opacity-60">{label}</span>
+      <span className={`font-fira text-lg font-bold ${isExpired ? "text-error" : "text-base-content"}`}>
         {timeLeft}
       </span>
     </div>

@@ -73,10 +73,12 @@ const AuctionsPage: NextPage = () => {
       <div className="max-w-7xl mx-auto">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-12">
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-black uppercase">Browse Auctions</h1>
+          <h1 className="font-winky text-4xl md:text-5xl font-normal tracking-wide text-black uppercase">
+            Browse Auctions
+          </h1>
           <Link
             href="/auction/create"
-            className="btn bg-[#0066FF] text-white border-4 border-black hover:bg-[#0055DD] rounded-none px-8 py-3 h-auto text-lg font-black uppercase tracking-wider shadow-[6px_6px_0px_#000000] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_#000000] transition-all"
+            className="btn bg-[#0066FF] text-white border-4 border-black hover:bg-[#0055DD] rounded-none px-8 py-3 h-auto text-lg font-dm font-bold uppercase tracking-wider shadow-[6px_6px_0px_#000000] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_#000000] transition-all"
           >
             Create Auction
           </Link>
@@ -89,7 +91,7 @@ const AuctionsPage: NextPage = () => {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-2 font-black uppercase tracking-wider text-sm border-2 border-black transition-all ${
+                className={`px-4 py-2 font-fira font-bold uppercase tracking-wider text-sm border-2 border-black transition-all ${
                   filter === f
                     ? "bg-black text-white shadow-[2px_2px_0px_#0066FF] translate-y-[2px] translate-x-[2px]"
                     : "bg-[#E5E5E5] text-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_rgba(0,0,0,1)]"
@@ -99,7 +101,7 @@ const AuctionsPage: NextPage = () => {
               </button>
             ))}
           </div>
-          <p className="text-sm font-black uppercase tracking-wider text-black bg-[#E5E5E5] border-2 border-black px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+          <p className="font-fira text-sm font-bold uppercase tracking-wider text-black bg-[#E5E5E5] border-2 border-black px-4 py-2 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
             {nextAuctionId !== undefined ? `${Number(nextAuctionId)} total auctions` : "Loading..."}
           </p>
         </div>
@@ -112,8 +114,10 @@ const AuctionsPage: NextPage = () => {
         ) : auctions.length === 0 ? (
           <div className="text-center py-20 border-4 border-black bg-white shadow-[8px_8px_0px_#0066FF] w-full flex flex-col items-center justify-center min-h-[400px]">
             <div className="text-6xl mb-6 text-black opacity-20 font-black">0</div>
-            <h3 className="text-2xl font-black uppercase tracking-wider text-black mb-4">No auctions found</h3>
-            <p className="text-base text-black/70 font-bold mb-8 max-w-md mx-auto">
+            <h3 className="text-2xl font-winky font-normal tracking-wide uppercase text-black mb-4">
+              No auctions found
+            </h3>
+            <p className="font-dm text-base text-black/70 font-bold mb-8 max-w-md mx-auto">
               {filter === "all"
                 ? "Be the first to create a privacy-preserving sealed-bid auction."
                 : `No auctions match the "${filter === "mine" ? "My Auctions" : filter}" filter.`}
@@ -121,7 +125,7 @@ const AuctionsPage: NextPage = () => {
             {filter === "all" && (
               <Link
                 href="/auction/create"
-                className="btn bg-[#0066FF] text-white border-4 border-black hover:bg-[#0055DD] rounded-none px-8 py-3 h-auto text-lg font-black uppercase tracking-wider shadow-[6px_6px_0px_#000000] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_#000000] transition-all"
+                className="btn bg-[#0066FF] text-white border-4 border-black hover:bg-[#0055DD] rounded-none px-8 py-3 h-auto text-lg font-dm font-bold uppercase tracking-wider shadow-[6px_6px_0px_#000000] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_#000000] transition-all"
               >
                 Create First Auction
               </Link>

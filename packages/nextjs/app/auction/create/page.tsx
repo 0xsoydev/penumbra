@@ -158,7 +158,7 @@ const CreateAuction: NextPage = () => {
               />
             </svg>
           </div>
-          <h2 className="text-3xl font-black mb-4 text-black uppercase">Connect Wallet</h2>
+          <h2 className="text-3xl font-winky font-normal tracking-wide mb-4 text-black uppercase">Connect Wallet</h2>
           <p className="text-base font-bold text-black border-2 border-black px-4 py-2 bg-[#E5E5E5] shadow-[2px_2px_0px_#000]">
             You need to connect a wallet to create an auction.
           </p>
@@ -187,7 +187,7 @@ const CreateAuction: NextPage = () => {
               />
             </svg>
           </div>
-          <h2 className="text-4xl font-black mb-4 text-black uppercase">Auction Created!</h2>
+          <h2 className="text-4xl font-winky font-normal tracking-wide mb-4 text-black uppercase">Auction Created!</h2>
           <p className="text-xl font-bold mb-8 text-black bg-[#E5E5E5] border-2 border-black px-6 py-2 shadow-[2px_2px_0px_#000]">
             Auction #{createdAuctionId} is now live.
           </p>
@@ -232,7 +232,9 @@ const CreateAuction: NextPage = () => {
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-10 text-center">
-          <h1 className="text-5xl md:text-6xl font-black tracking-tight mb-4 text-black uppercase">Create Auction</h1>
+          <h1 className="font-winky text-5xl md:text-6xl font-normal tracking-wide mb-4 text-black uppercase">
+            Create Auction
+          </h1>
           <p className="text-lg font-bold text-black bg-white border-2 border-black px-6 py-2 inline-block shadow-[4px_4px_0px_#0066FF]">
             List your ERC-20 tokens for a sealed-bid auction.
           </p>
@@ -259,14 +261,14 @@ const CreateAuction: NextPage = () => {
             {/* Token Address */}
             <div className="form-control">
               <label className="label px-0 pt-0">
-                <span className="label-text font-black text-lg text-black uppercase">Token Address</span>
+                <span className="label-text font-fira font-bold text-lg text-black uppercase">Token Address</span>
               </label>
               <input
                 type="text"
                 value={tokenAddress}
                 onChange={e => setTokenAddress(e.target.value)}
                 placeholder="0x..."
-                className="input bg-white border-2 border-black rounded-none focus:outline-none focus:ring-0 focus:border-[#0066FF] focus:shadow-[4px_4px_0px_#0066FF] text-black font-mono text-sm w-full transition-all"
+                className="input bg-white border-2 border-black rounded-none focus:outline-none focus:ring-0 focus:border-[#0066FF] focus:shadow-[4px_4px_0px_#0066FF] text-black font-fira text-sm w-full transition-all"
               />
               <label className="label px-0 pb-0">
                 <span className="label-text-alt font-bold text-black/60">Default: PenumbraToken (PNBR)</span>
@@ -276,7 +278,7 @@ const CreateAuction: NextPage = () => {
             {/* Token Amount */}
             <div className="form-control">
               <label className="label px-0 pt-0">
-                <span className="label-text font-black text-lg text-black uppercase">Token Amount</span>
+                <span className="label-text font-fira font-bold text-lg text-black uppercase">Token Amount</span>
                 {tokenBalance !== undefined && (
                   <span className="label-text-alt font-bold bg-[#E5E5E5] border border-black px-2 py-1 text-black">
                     Balance: {(Number(tokenBalance) / 1e18).toFixed(2)} PNBR
@@ -302,7 +304,7 @@ const CreateAuction: NextPage = () => {
             {/* Minimum Bid */}
             <div className="form-control">
               <label className="label px-0 pt-0">
-                <span className="label-text font-black text-lg text-black uppercase">Minimum Bid (ETH)</span>
+                <span className="label-text font-fira font-bold text-lg text-black uppercase">Minimum Bid (ETH)</span>
               </label>
               <input
                 type="number"
@@ -374,7 +376,7 @@ const CreateAuction: NextPage = () => {
                       value={docCid}
                       onChange={e => setDocCid(e.target.value)}
                       placeholder="bafy..."
-                      className="input bg-white border-2 border-black rounded-none focus:outline-none focus:ring-0 focus:border-[#0066FF] focus:shadow-[4px_4px_0px_#0066FF] text-black font-mono text-sm w-full transition-all"
+                      className="input bg-white border-2 border-black rounded-none focus:outline-none focus:ring-0 focus:border-[#0066FF] focus:shadow-[4px_4px_0px_#0066FF] text-black font-fira text-sm w-full transition-all"
                     />
                   </div>
                 </div>
@@ -424,7 +426,7 @@ const CreateAuction: NextPage = () => {
             {/* Info box */}
             <div className="mt-4 border-4 border-black bg-white p-4 shadow-[4px_4px_0px_#000000] relative overflow-hidden">
               <div className="absolute top-0 right-0 w-16 h-16 bg-[#0066FF] opacity-10 rounded-bl-full"></div>
-              <h3 className="font-black text-black uppercase mb-2 flex items-center gap-2">
+              <h3 className="font-winky font-normal tracking-wide text-black uppercase mb-2 flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"

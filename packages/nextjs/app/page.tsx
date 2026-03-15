@@ -1,5 +1,9 @@
 "use client";
 
+import type { NextPage } from "next";
+import { AuctionList } from "~~/components/penumbra/AuctionList";
+import { Hero } from "~~/components/penumbra/Hero";
+import { StorytellingSection } from "~~/components/penumbra/StorytellingSection";
 import Image from "next/image";
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -9,6 +13,9 @@ import starImage from "~~/components/assets/star.png";
 const Home: NextPage = () => {
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-white">
+      <Hero />
+      <StorytellingSection />
+      <AuctionList />
       {/* Hero Wrapper */}
       <div className="bg-[#0066FF] w-full p-4 md:p-8 lg:p-12 flex flex-col items-center min-h-screen">
         {/* Inner Rounded Box */}

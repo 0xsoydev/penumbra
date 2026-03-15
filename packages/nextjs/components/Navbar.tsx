@@ -9,7 +9,7 @@ const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About Us" },
   { href: "/profile", label: "Dashboard" },
-  { href: "/auction/create", label: "Create Auction" },
+  { href: "/auctions", label: "Auctions" },
 ] as const;
 
 export const Navbar = () => {

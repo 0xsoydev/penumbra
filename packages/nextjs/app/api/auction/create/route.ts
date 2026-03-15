@@ -3,7 +3,7 @@ import { getAddress, isAddress } from "viem";
 import { db } from "~~/db";
 import { auctions } from "~~/db/schema";
 import { isEnsVerified } from "~~/services/ens/verify";
-import { createAuctionWallet } from "~~/services/penumbra/bitgo";
+import { createAuctionWallet, registerWebhook } from "~~/services/penumbra/bitgo";
 
 /**
  * POST /api/auction/create
@@ -42,6 +42,23 @@ export async function POST(req: NextRequest) {
     // 1. Create BitGo wallet for this auction
     const { walletId, walletAddress, feeAddress, baseAddress } = await createAuctionWallet(id);
 
+    // 1b. Register webhook for automatic deposit confirmation + payout
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    let webhookRegistered = false;
+    if (appUrl) {
+      try {
+        const webhookUrl = `${appUrl}/api/webhooks/bitgo`;
+        await registerWebhook(walletId, webhookUrl);
+        webhookRegistered = true;
+        console.log(`[create] Webhook registered for auction ${id}: ${webhookUrl}`);
+      } catch (err) {
+        // Non-fatal — webhook can be registered later via admin backfill
+        console.warn(`[create] Failed to register webhook for auction ${id}:`, err);
+      }
+    } else {
+      console.warn("[create] NEXT_PUBLIC_APP_URL not set — skipping webhook registration");
+    }
+
     // 2. Auto-verify ENS via reverse resolution (address → name)
     const ensVerified = await isEnsVerified(checksummedAddress);
 
@@ -66,6 +83,7 @@ export async function POST(req: NextRequest) {
         baseAddress,
         ensVerified,
         docCid: docCid ?? null,
+        webhookRegistered,
       },
     });
   } catch (error) {

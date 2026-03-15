@@ -8,6 +8,7 @@ export const auctions = pgTable("auctions", {
   ensName: text("ens_name"), // pseudonym flow only — NEVER store the reverse-resolved ENS name here
   ensVerified: boolean("ens_verified").notNull().default(false),
   docCid: text("doc_cid"),
+  payoutTxId: text("payout_tx_id"), // BitGo txId once seller has been paid — null = not yet paid
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -41,6 +42,7 @@ export const stealthAnnouncements = pgTable("stealth_announcements", {
   id: serial("id").primaryKey(),
   recipientAddress: text("recipient_address").notNull(),
   ephemeralPublicKey: text("ephemeral_public_key").notNull(),
+  ciphertext: text("ciphertext"), // encrypted random number — needed to derive stealth private key
   stealthAddress: text("stealth_address").notNull(),
   auctionId: bigint("auction_id", { mode: "number" }).notNull(),
 });

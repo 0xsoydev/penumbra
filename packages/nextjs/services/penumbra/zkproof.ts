@@ -2,7 +2,14 @@ import { Barretenberg, UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
 import { ethers } from "ethers";
 import { readFileSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
+
+// Set CRS cache path BEFORE any bb.js imports — defaults to ~/.bb-crs which fails on Vercel
+// Must be set at module load time, before Barretenberg class is instantiated
+if (!process.env.CRS_PATH) {
+  process.env.CRS_PATH = "/tmp/.bb-crs";
+}
 
 // ----------------------------------------------------------------
 // ZK Proof Service — server-side only
@@ -11,15 +18,12 @@ import { join } from "path";
 // ----------------------------------------------------------------
 
 // Load compiled circuit artifact
-const CIRCUIT_PATH = join(
-  process.cwd(),
-  "..",
-  "foundry",
-  "circuits",
-  "nullifier_claim",
-  "target",
-  "nullifier_claim.json",
-);
+// Primary: local copy in packages/nextjs/data/ (works on Vercel)
+// Fallback: original location in packages/foundry/ (works in local dev)
+const CIRCUIT_PATHS = [
+  join(process.cwd(), "data", "circuits", "nullifier_claim.json"),
+  join(process.cwd(), "..", "foundry", "circuits", "nullifier_claim", "target", "nullifier_claim.json"),
+];
 
 let circuitArtifact: any = null;
 let noirInstance: InstanceType<typeof Noir> | null = null;
@@ -28,7 +32,19 @@ let bbInstance: InstanceType<typeof Barretenberg> | null = null;
 
 function getCircuit() {
   if (!circuitArtifact) {
-    const raw = readFileSync(CIRCUIT_PATH, "utf-8");
+    let raw: string | null = null;
+    for (const p of CIRCUIT_PATHS) {
+      try {
+        raw = readFileSync(p, "utf-8");
+        console.log(`[zkproof] Loaded circuit from: ${p}`);
+        break;
+      } catch {
+        // Try next path
+      }
+    }
+    if (!raw) {
+      throw new Error(`Circuit artifact not found. Tried: ${CIRCUIT_PATHS.join(", ")}`);
+    }
     circuitArtifact = JSON.parse(raw);
   }
   return circuitArtifact;
@@ -36,7 +52,9 @@ function getCircuit() {
 
 async function getBb() {
   if (!bbInstance) {
-    bbInstance = await Barretenberg.new();
+    // Use /tmp for CRS cache — required for Vercel serverless (home dir is read-only)
+    const crsPath = process.env.CRS_PATH || join(tmpdir(), ".bb-crs");
+    bbInstance = await Barretenberg.new({ crsPath });
   }
   return bbInstance;
 }

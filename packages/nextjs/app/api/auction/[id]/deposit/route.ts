@@ -119,6 +119,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       depositAddress,
       auctionId,
       nullifier,
+      secret,
+      salt,
       commitHash,
       onChainTxHash: receipt.transactionHash,
       message: "Bid committed on-chain. Send ETH to the deposit address to back your bid.",
